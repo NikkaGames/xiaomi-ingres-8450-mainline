@@ -33,6 +33,7 @@
 
 #include <linux/cache.h>
 #include <linux/err.h>
+#include <linux/export.h>
 #include <linux/iio/iio.h>
 #include <linux/iio/types.h>
 #include <linux/module.h>

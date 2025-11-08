@@ -9,7 +9,6 @@
 
 #include <linux/device.h>
 #include <linux/dma-mapping.h>
-#include <linux/export.h>
 #include <linux/slab.h>
 
 #include <media/media-entity.h>

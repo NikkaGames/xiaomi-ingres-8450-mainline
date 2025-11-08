@@ -866,11 +866,11 @@ xchk_trans_cancel(
 	sc->tp = NULL;
 }
 
-void
+int
 xchk_trans_alloc_empty(
 	struct xfs_scrub	*sc)
 {
-	sc->tp = xfs_trans_alloc_empty(sc->mp);
+	return xfs_trans_alloc_empty(sc->mp, &sc->tp);
 }
 
 /*
@@ -892,8 +892,7 @@ xchk_trans_alloc(
 		return xfs_trans_alloc(sc->mp, &M_RES(sc->mp)->tr_itruncate,
 				resblks, 0, 0, &sc->tp);
 
-	xchk_trans_alloc_empty(sc);
-	return 0;
+	return xchk_trans_alloc_empty(sc);
 }
 
 /* Set us up with a transaction and an empty context. */

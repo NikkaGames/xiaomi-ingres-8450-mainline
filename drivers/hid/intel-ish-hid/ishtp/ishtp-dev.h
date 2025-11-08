@@ -47,9 +47,6 @@
 
 #define	MAX_DMA_DELAY	20
 
-/* 300ms to get resume response */
-#define WAIT_FOR_RESUME_ACK_MS		300
-
 /* ISHTP device states */
 enum ishtp_dev_state {
 	ISHTP_DEV_INITIALIZING = 0,

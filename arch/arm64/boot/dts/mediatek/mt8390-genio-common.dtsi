@@ -1161,10 +1161,6 @@
 			linux,keycodes = <KEY_POWER>;
 			wakeup-source;
 		};
-
-		home {
-			linux,keycodes = <KEY_HOME>;
-		};
 	};
 };
 

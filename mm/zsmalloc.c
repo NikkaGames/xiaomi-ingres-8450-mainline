@@ -244,7 +244,6 @@ static inline void free_zpdesc(struct zpdesc *zpdesc)
 {
 	struct page *page = zpdesc_page(zpdesc);
 
-	/* PageZsmalloc is sticky until the page is freed to the buddy. */
 	__free_page(page);
 }
 
@@ -877,10 +876,11 @@ static void reset_zpdesc(struct zpdesc *zpdesc)
 {
 	struct page *page = zpdesc_page(zpdesc);
 
+	__ClearPageMovable(page);
 	ClearPagePrivate(page);
 	zpdesc->zspage = NULL;
 	zpdesc->next = NULL;
-	/* PageZsmalloc is sticky until the page is freed to the buddy. */
+	__ClearPageZsmalloc(page);
 }
 
 static int trylock_zspage(struct zspage *zspage)
@@ -1058,6 +1058,7 @@ static struct zspage *alloc_zspage(struct zs_pool *pool,
 		if (!zpdesc) {
 			while (--i >= 0) {
 				zpdesc_dec_zone_page_state(zpdescs[i]);
+				__zpdesc_clear_zsmalloc(zpdescs[i]);
 				free_zpdesc(zpdescs[i]);
 			}
 			cache_free_zspage(pool, zspage);
@@ -1688,6 +1689,8 @@ static void lock_zspage(struct zspage *zspage)
 
 #ifdef CONFIG_COMPACTION
 
+static const struct movable_operations zsmalloc_mops;
+
 static void replace_sub_page(struct size_class *class, struct zspage *zspage,
 				struct zpdesc *newzpdesc, struct zpdesc *oldzpdesc)
 {
@@ -1710,17 +1713,18 @@ static void replace_sub_page(struct size_class *class, struct zspage *zspage,
 	set_first_obj_offset(newzpdesc, first_obj_offset);
 	if (unlikely(ZsHugePage(zspage)))
 		newzpdesc->handle = oldzpdesc->handle;
-	__zpdesc_set_movable(newzpdesc);
+	__zpdesc_set_movable(newzpdesc, &zsmalloc_mops);
 }
 
 static bool zs_page_isolate(struct page *page, isolate_mode_t mode)
 {
 	/*
-	 * Page is locked so zspage can't be destroyed concurrently
-	 * (see free_zspage()). But if the page was already destroyed
-	 * (see reset_zpdesc()), refuse isolation here.
+	 * Page is locked so zspage couldn't be destroyed. For detail, look at
+	 * lock_zspage in free_zspage.
 	 */
-	return page_zpdesc(page)->zspage;
+	VM_BUG_ON_PAGE(PageIsolated(page), page);
+
+	return true;
 }
 
 static int zs_page_migrate(struct page *newpage, struct page *page,
@@ -1738,15 +1742,7 @@ static int zs_page_migrate(struct page *newpage, struct page *page,
 	unsigned long old_obj, new_obj;
 	unsigned int obj_idx;
 
-	/*
-	 * TODO: nothing prevents a zspage from getting destroyed while
-	 * it is isolated for migration, as the page lock is temporarily
-	 * dropped after zs_page_isolate() succeeded: we should rework that
-	 * and defer destroying such pages once they are un-isolated (putback)
-	 * instead.
-	 */
-	if (!zpdesc->zspage)
-		return MIGRATEPAGE_SUCCESS;
+	VM_BUG_ON_PAGE(!zpdesc_is_isolated(zpdesc), zpdesc_page(zpdesc));
 
 	/* The page is locked, so this pointer must remain valid */
 	zspage = get_zspage(zpdesc);
@@ -1818,9 +1814,10 @@ static int zs_page_migrate(struct page *newpage, struct page *page,
 
 static void zs_page_putback(struct page *page)
 {
+	VM_BUG_ON_PAGE(!PageIsolated(page), page);
 }
 
-const struct movable_operations zsmalloc_mops = {
+static const struct movable_operations zsmalloc_mops = {
 	.isolate_page = zs_page_isolate,
 	.migrate_page = zs_page_migrate,
 	.putback_page = zs_page_putback,
@@ -1883,7 +1880,7 @@ static void SetZsPageMovable(struct zs_pool *pool, struct zspage *zspage)
 
 	do {
 		WARN_ON(!zpdesc_trylock(zpdesc));
-		__zpdesc_set_movable(zpdesc);
+		__zpdesc_set_movable(zpdesc, &zsmalloc_mops);
 		zpdesc_unlock(zpdesc);
 	} while ((zpdesc = get_next_zpdesc(zpdesc)) != NULL);
 }
@@ -2246,15 +2243,8 @@ EXPORT_SYMBOL_GPL(zs_destroy_pool);
 
 static int __init zs_init(void)
 {
-	int rc __maybe_unused;
-
 #ifdef CONFIG_ZPOOL
 	zpool_register_driver(&zs_zpool_driver);
-#endif
-#ifdef CONFIG_COMPACTION
-	rc = set_movable_ops(&zsmalloc_mops, PGTY_zsmalloc);
-	if (rc)
-		return rc;
 #endif
 	zs_stat_init();
 	return 0;
@@ -2264,9 +2254,6 @@ static void __exit zs_exit(void)
 {
 #ifdef CONFIG_ZPOOL
 	zpool_unregister_driver(&zs_zpool_driver);
-#endif
-#ifdef CONFIG_COMPACTION
-	set_movable_ops(NULL, PGTY_zsmalloc);
 #endif
 	zs_stat_exit();
 }

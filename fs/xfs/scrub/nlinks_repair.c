@@ -340,7 +340,9 @@ xrep_nlinks(
 		 * We can only push the inactivation workqueues with an empty
 		 * transaction.
 		 */
-		xchk_trans_alloc_empty(sc);
+		error = xchk_trans_alloc_empty(sc);
+		if (error)
+			break;
 	}
 	xchk_iscan_iter_finish(&xnc->compare_iscan);
 	xchk_iscan_teardown(&xnc->compare_iscan);

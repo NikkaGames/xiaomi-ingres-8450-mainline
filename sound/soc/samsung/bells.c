@@ -133,6 +133,8 @@ static int bells_set_bias_level_post(struct snd_soc_card *card,
 		break;
 	}
 
+	dapm->bias_level = level;
+
 	return 0;
 }
 

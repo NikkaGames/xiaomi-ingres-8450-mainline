@@ -500,13 +500,14 @@ nfs_copy_boot_verifier(struct nfs_write_verifier *verifier, struct inode *inode)
 {
 	struct nfs_client *clp = NFS_SERVER(inode)->nfs_client;
 	u32 *verf = (u32 *)verifier->data;
-	unsigned int seq;
+	int seq = 0;
 
 	do {
-		seq = read_seqbegin(&clp->cl_boot_lock);
+		read_seqbegin_or_lock(&clp->cl_boot_lock, &seq);
 		verf[0] = (u32)clp->cl_nfssvc_boot.tv_sec;
 		verf[1] = (u32)clp->cl_nfssvc_boot.tv_nsec;
-	} while (read_seqretry(&clp->cl_boot_lock, seq));
+	} while (need_seqretry(&clp->cl_boot_lock, seq));
+	done_seqretry(&clp->cl_boot_lock, seq);
 }
 
 static void

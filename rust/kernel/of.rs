@@ -2,11 +2,7 @@
 
 //! Device Tree / Open Firmware abstractions.
 
-use crate::{
-    bindings,
-    device_id::{RawDeviceId, RawDeviceIdIndex},
-    prelude::*,
-};
+use crate::{bindings, device_id::RawDeviceId, prelude::*};
 
 /// IdTable type for OF drivers.
 pub type IdTable<T> = &'static dyn kernel::device_id::IdTable<DeviceId, T>;
@@ -16,18 +12,17 @@ pub type IdTable<T> = &'static dyn kernel::device_id::IdTable<DeviceId, T>;
 #[derive(Clone, Copy)]
 pub struct DeviceId(bindings::of_device_id);
 
-// SAFETY: `DeviceId` is a `#[repr(transparent)]` wrapper of `struct of_device_id` and
-// does not add additional invariants, so it's safe to transmute to `RawType`.
+// SAFETY:
+// * `DeviceId` is a `#[repr(transparent)` wrapper of `struct of_device_id` and does not add
+//   additional invariants, so it's safe to transmute to `RawType`.
+// * `DRIVER_DATA_OFFSET` is the offset to the `data` field.
 unsafe impl RawDeviceId for DeviceId {
     type RawType = bindings::of_device_id;
-}
 
-// SAFETY: `DRIVER_DATA_OFFSET` is the offset to the `data` field.
-unsafe impl RawDeviceIdIndex for DeviceId {
     const DRIVER_DATA_OFFSET: usize = core::mem::offset_of!(bindings::of_device_id, data);
 
     fn index(&self) -> usize {
-        self.0.data as usize
+        self.0.data as _
     }
 }
 
@@ -39,10 +34,10 @@ impl DeviceId {
         // SAFETY: FFI type is valid to be zero-initialized.
         let mut of: bindings::of_device_id = unsafe { core::mem::zeroed() };
 
-        // TODO: Use `copy_from_slice` once stabilized for `const`.
+        // TODO: Use `clone_from_slice` once the corresponding types do match.
         let mut i = 0;
         while i < src.len() {
-            of.compatible[i] = src[i];
+            of.compatible[i] = src[i] as _;
             i += 1;
         }
 

@@ -569,7 +569,9 @@ xrep_parent_scan_dirtree(
 	if (sc->ilock_flags & (XFS_ILOCK_SHARED | XFS_ILOCK_EXCL))
 		xchk_iunlock(sc, sc->ilock_flags & (XFS_ILOCK_SHARED |
 						    XFS_ILOCK_EXCL));
-	xchk_trans_alloc_empty(sc);
+	error = xchk_trans_alloc_empty(sc);
+	if (error)
+		return error;
 
 	while ((error = xchk_iscan_iter(&rp->pscan.iscan, &ip)) == 1) {
 		bool		flush;
@@ -595,7 +597,9 @@ xrep_parent_scan_dirtree(
 			if (error)
 				break;
 
-			xchk_trans_alloc_empty(sc);
+			error = xchk_trans_alloc_empty(sc);
+			if (error)
+				break;
 		}
 
 		if (xchk_should_terminate(sc, &error))
@@ -1095,7 +1099,9 @@ xrep_parent_flush_xattrs(
 	xrep_tempfile_iounlock(rp->sc);
 
 	/* Recreate the empty transaction and relock the inode. */
-	xchk_trans_alloc_empty(rp->sc);
+	error = xchk_trans_alloc_empty(rp->sc);
+	if (error)
+		return error;
 	xchk_ilock(rp->sc, XFS_ILOCK_EXCL);
 	return 0;
 }

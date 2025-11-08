@@ -1148,15 +1148,13 @@ static int gfx_v9_4_3_sw_init(struct amdgpu_ip_block *ip_block)
 	switch (amdgpu_ip_version(adev, GC_HWIP, 0)) {
 	case IP_VERSION(9, 4, 3):
 	case IP_VERSION(9, 4, 4):
-		if ((adev->gfx.mec_fw_version >= 155) &&
-		    !amdgpu_sriov_vf(adev)) {
+		if (adev->gfx.mec_fw_version >= 155) {
 			adev->gfx.compute_supported_reset |= AMDGPU_RESET_TYPE_PER_QUEUE;
 			adev->gfx.compute_supported_reset |= AMDGPU_RESET_TYPE_PER_PIPE;
 		}
 		break;
 	case IP_VERSION(9, 5, 0):
-		if ((adev->gfx.mec_fw_version >= 21) &&
-		    !amdgpu_sriov_vf(adev)) {
+		if (adev->gfx.mec_fw_version >= 21) {
 			adev->gfx.compute_supported_reset |= AMDGPU_RESET_TYPE_PER_QUEUE;
 			adev->gfx.compute_supported_reset |= AMDGPU_RESET_TYPE_PER_PIPE;
 		}
@@ -1351,9 +1349,7 @@ static void gfx_v9_4_3_constants_init(struct amdgpu_device *adev)
 	switch (amdgpu_ip_version(adev, GC_HWIP, 0)) {
 	/* ToDo: GC 9.4.4 */
 	case IP_VERSION(9, 4, 3):
-		if (adev->gfx.mec_fw_version >= 184 &&
-		    (amdgpu_sriov_reg_access_sq_config(adev) ||
-		     !amdgpu_sriov_vf(adev)))
+		if (adev->gfx.mec_fw_version >= 184)
 			adev->gmc.xnack_flags |= AMDGPU_GMC_XNACK_FLAG_CHAIN;
 		break;
 	case IP_VERSION(9, 5, 0):
@@ -3556,8 +3552,7 @@ static int gfx_v9_4_3_reset_hw_pipe(struct amdgpu_ring *ring)
 }
 
 static int gfx_v9_4_3_reset_kcq(struct amdgpu_ring *ring,
-				unsigned int vmid,
-				struct amdgpu_fence *timedout_fence)
+				unsigned int vmid)
 {
 	struct amdgpu_device *adev = ring->adev;
 	struct amdgpu_kiq *kiq = &adev->gfx.kiq[ring->xcc_id];
@@ -3565,10 +3560,11 @@ static int gfx_v9_4_3_reset_kcq(struct amdgpu_ring *ring,
 	unsigned long flags;
 	int r;
 
-	if (!kiq->pmf || !kiq->pmf->kiq_unmap_queues)
+	if (amdgpu_sriov_vf(adev))
 		return -EINVAL;
 
-	amdgpu_ring_reset_helper_begin(ring, timedout_fence);
+	if (!kiq->pmf || !kiq->pmf->kiq_unmap_queues)
+		return -EINVAL;
 
 	spin_lock_irqsave(&kiq->ring_lock, flags);
 
@@ -3595,9 +3591,7 @@ static int gfx_v9_4_3_reset_kcq(struct amdgpu_ring *ring,
 		dev_err(adev->dev, "fail to wait on hqd deactive and will try pipe reset\n");
 
 pipe_reset:
-	if (r) {
-		if (!(adev->gfx.compute_supported_reset & AMDGPU_RESET_TYPE_PER_PIPE))
-			return -EOPNOTSUPP;
+	if(r) {
 		r = gfx_v9_4_3_reset_hw_pipe(ring);
 		dev_info(adev->dev, "ring: %s pipe reset :%s\n", ring->name,
 				r ? "failed" : "successfully");
@@ -3618,14 +3612,14 @@ pipe_reset:
 	}
 	kiq->pmf->kiq_map_queues(kiq_ring, ring);
 	amdgpu_ring_commit(kiq_ring);
-	r = amdgpu_ring_test_ring(kiq_ring);
 	spin_unlock_irqrestore(&kiq->ring_lock, flags);
+
+	r = amdgpu_ring_test_ring(kiq_ring);
 	if (r) {
 		dev_err(adev->dev, "fail to remap queue\n");
 		return r;
 	}
-
-	return amdgpu_ring_reset_helper_end(ring, timedout_fence);
+	return amdgpu_ring_test_ring(ring);
 }
 
 enum amdgpu_gfx_cp_ras_mem_id {

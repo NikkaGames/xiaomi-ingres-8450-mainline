@@ -27,6 +27,7 @@
 #include <linux/compat.h>
 #include <linux/kprobes.h>
 #include <linux/random.h>
+#include <linux/export.h>
 #include <linux/init_task.h>
 #include <linux/entry-common.h>
 #include <linux/io.h>

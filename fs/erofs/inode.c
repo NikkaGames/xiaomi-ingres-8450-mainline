@@ -29,7 +29,6 @@ static int erofs_read_inode(struct inode *inode)
 	struct super_block *sb = inode->i_sb;
 	erofs_blk_t blkaddr = erofs_blknr(sb, erofs_iloc(inode));
 	unsigned int ofs = erofs_blkoff(sb, erofs_iloc(inode));
-	bool in_mbox = erofs_inode_in_metabox(inode);
 	struct erofs_buf buf = __EROFS_BUF_INITIALIZER;
 	struct erofs_sb_info *sbi = EROFS_SB(sb);
 	erofs_blk_t addrmask = BIT_ULL(48) - 1;
@@ -40,10 +39,10 @@ static int erofs_read_inode(struct inode *inode)
 	void *ptr;
 	int err = 0;
 
-	ptr = erofs_read_metabuf(&buf, sb, erofs_pos(sb, blkaddr), in_mbox);
+	ptr = erofs_read_metabuf(&buf, sb, erofs_pos(sb, blkaddr), true);
 	if (IS_ERR(ptr)) {
 		err = PTR_ERR(ptr);
-		erofs_err(sb, "failed to read inode meta block (nid: %llu): %d",
+		erofs_err(sb, "failed to get inode (nid: %llu) page, err %d",
 			  vi->nid, err);
 		goto err_out;
 	}
@@ -79,10 +78,10 @@ static int erofs_read_inode(struct inode *inode)
 
 			memcpy(&copied, dic, gotten);
 			ptr = erofs_read_metabuf(&buf, sb,
-					erofs_pos(sb, blkaddr + 1), in_mbox);
+					erofs_pos(sb, blkaddr + 1), true);
 			if (IS_ERR(ptr)) {
 				err = PTR_ERR(ptr);
-				erofs_err(sb, "failed to read inode payload block (nid: %llu): %d",
+				erofs_err(sb, "failed to get inode payload block (nid: %llu), err %d",
 					  vi->nid, err);
 				goto err_out;
 			}
@@ -265,13 +264,13 @@ static int erofs_fill_inode(struct inode *inode)
  * ino_t is 32-bits on 32-bit arch. We have to squash the 64-bit value down
  * so that it will fit.
  */
-static ino_t erofs_squash_ino(struct super_block *sb, erofs_nid_t nid)
+static ino_t erofs_squash_ino(erofs_nid_t nid)
 {
-	u64 ino64 = erofs_nid_to_ino64(EROFS_SB(sb), nid);
+	ino_t ino = (ino_t)nid;
 
 	if (sizeof(ino_t) < sizeof(erofs_nid_t))
-		ino64 ^= ino64 >> (sizeof(erofs_nid_t) - sizeof(ino_t)) * 8;
-	return (ino_t)ino64;
+		ino ^= nid >> (sizeof(erofs_nid_t) - sizeof(ino_t)) * 8;
+	return ino;
 }
 
 static int erofs_iget5_eq(struct inode *inode, void *opaque)
@@ -283,7 +282,7 @@ static int erofs_iget5_set(struct inode *inode, void *opaque)
 {
 	const erofs_nid_t nid = *(erofs_nid_t *)opaque;
 
-	inode->i_ino = erofs_squash_ino(inode->i_sb, nid);
+	inode->i_ino = erofs_squash_ino(nid);
 	EROFS_I(inode)->nid = nid;
 	return 0;
 }
@@ -292,7 +291,7 @@ struct inode *erofs_iget(struct super_block *sb, erofs_nid_t nid)
 {
 	struct inode *inode;
 
-	inode = iget5_locked(sb, erofs_squash_ino(sb, nid), erofs_iget5_eq,
+	inode = iget5_locked(sb, erofs_squash_ino(nid), erofs_iget5_eq,
 			     erofs_iget5_set, &nid);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);

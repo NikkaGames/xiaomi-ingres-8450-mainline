@@ -9,7 +9,7 @@
 
 #include <asm/fpu-insn-asm.h>
 
-#ifndef __ASSEMBLER__
+#ifndef __ASSEMBLY__
 
 #include <linux/instrumented.h>
 #include <asm/asm-extable.h>
@@ -475,5 +475,5 @@ static __always_inline void fpu_vzero(u8 v)
 		     : "memory");
 }
 
-#endif /* __ASSEMBLER__ */
+#endif /* __ASSEMBLY__ */
 #endif	/* __ASM_S390_FPU_INSN_H */

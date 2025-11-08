@@ -655,11 +655,11 @@ static int __oxygen_pci_probe(struct pci_dev *pci, int index, char *id,
 	chip->irq = pci->irq;
 	card->sync_irq = chip->irq;
 
-	strscpy(card->driver, chip->model.chip);
-	strscpy(card->shortname, chip->model.shortname);
+	strcpy(card->driver, chip->model.chip);
+	strcpy(card->shortname, chip->model.shortname);
 	sprintf(card->longname, "%s at %#lx, irq %i",
 		chip->model.longname, chip->addr, chip->irq);
-	strscpy(card->mixername, chip->model.chip);
+	strcpy(card->mixername, chip->model.chip);
 	snd_component_add(card, chip->model.chip);
 
 	err = oxygen_pcm_init(chip);

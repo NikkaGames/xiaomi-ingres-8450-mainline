@@ -1498,7 +1498,7 @@ static int rtsx_pci_sdmmc_drv_probe(struct platform_device *pdev)
 
 	dev_dbg(&(pdev->dev), ": Realtek PCI-E SDMMC controller found\n");
 
-	mmc = devm_mmc_alloc_host(&pdev->dev, sizeof(*host));
+	mmc = mmc_alloc_host(sizeof(*host), &pdev->dev);
 	if (!mmc)
 		return -ENOMEM;
 
@@ -1529,6 +1529,7 @@ static int rtsx_pci_sdmmc_drv_probe(struct platform_device *pdev)
 	if (ret) {
 		pm_runtime_dont_use_autosuspend(&pdev->dev);
 		pm_runtime_disable(&pdev->dev);
+		mmc_free_host(mmc);
 		return ret;
 	}
 
@@ -1570,6 +1571,8 @@ static void rtsx_pci_sdmmc_drv_remove(struct platform_device *pdev)
 
 	pm_runtime_dont_use_autosuspend(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
+
+	mmc_free_host(mmc);
 
 	dev_dbg(&(pdev->dev),
 		": Realtek PCI-E SDMMC controller has been removed\n");

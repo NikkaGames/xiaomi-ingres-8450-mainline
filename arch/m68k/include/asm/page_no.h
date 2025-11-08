@@ -2,7 +2,7 @@
 #ifndef _M68K_PAGE_NO_H
 #define _M68K_PAGE_NO_H
 
-#ifndef __ASSEMBLER__
+#ifndef __ASSEMBLY__
  
 extern unsigned long memory_start;
 extern unsigned long memory_end;
@@ -37,6 +37,6 @@ static inline void *pfn_to_virt(unsigned long pfn)
 
 #define ARCH_PFN_OFFSET PHYS_PFN(PAGE_OFFSET_RAW)
 
-#endif /* __ASSEMBLER__ */
+#endif /* __ASSEMBLY__ */
 
 #endif /* _M68K_PAGE_NO_H */

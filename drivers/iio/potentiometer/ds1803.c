@@ -13,6 +13,7 @@
  */
 
 #include <linux/err.h>
+#include <linux/export.h>
 #include <linux/i2c.h>
 #include <linux/iio/iio.h>
 #include <linux/module.h>

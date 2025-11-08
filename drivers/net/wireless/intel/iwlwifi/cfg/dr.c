@@ -9,10 +9,10 @@
 #include "fw/api/txq.h"
 
 /* Highest firmware API version supported */
-#define IWL_DR_UCODE_API_MAX	102
+#define IWL_DR_UCODE_API_MAX	99
 
 /* Lowest firmware API version supported */
-#define IWL_DR_UCODE_API_MIN	98
+#define IWL_DR_UCODE_API_MIN	97
 
 /* Memory offsets and lengths */
 #define IWL_DR_SMEM_OFFSET		0x400000

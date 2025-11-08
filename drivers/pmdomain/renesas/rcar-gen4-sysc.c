@@ -374,4 +374,4 @@ out_put:
 	of_node_put(np);
 	return error;
 }
-postcore_initcall(rcar_gen4_sysc_pd_init);
+early_initcall(rcar_gen4_sysc_pd_init);

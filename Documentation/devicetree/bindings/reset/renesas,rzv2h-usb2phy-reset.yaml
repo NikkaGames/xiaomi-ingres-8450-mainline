@@ -15,12 +15,7 @@ description:
 
 properties:
   compatible:
-    oneOf:
-      - items:
-          - const: renesas,r9a09g056-usb2phy-reset # RZ/V2N
-          - const: renesas,r9a09g057-usb2phy-reset
-
-      - const: renesas,r9a09g057-usb2phy-reset # RZ/V2H(P)
+    const: renesas,r9a09g057-usb2phy-reset     # RZ/V2H(P)
 
   reg:
     maxItems: 1

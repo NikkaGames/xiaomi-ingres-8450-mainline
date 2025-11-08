@@ -33,7 +33,7 @@
 #define HAVE_ARCH_HUGETLB_UNMAPPED_AREA
 
 #include <asm/setup.h>
-#ifndef __ASSEMBLER__
+#ifndef __ASSEMBLY__
 
 void __storage_key_init_range(unsigned long start, unsigned long end);
 
@@ -130,19 +130,11 @@ typedef pte_t *pgtable_t;
 static inline void page_set_storage_key(unsigned long addr,
 					unsigned char skey, int mapped)
 {
-	if (!mapped) {
-		asm volatile(
-			"	.insn	rrf,0xb22b0000,%[skey],%[addr],8,0"
-			:
-			: [skey] "d" (skey), [addr] "a" (addr)
-			: "memory");
-	} else {
-		asm volatile(
-			"	sske	 %[skey],%[addr]"
-			:
-			: [skey] "d" (skey), [addr] "a" (addr)
-			: "memory");
-	}
+	if (!mapped)
+		asm volatile(".insn rrf,0xb22b0000,%0,%1,8,0"
+			     : : "d" (skey), "a" (addr));
+	else
+		asm volatile("sske %0,%1" : : "d" (skey), "a" (addr));
 }
 
 static inline unsigned char page_get_storage_key(unsigned long addr)
@@ -282,7 +274,7 @@ static inline unsigned long virt_to_pfn(const void *kaddr)
 
 #define VM_DATA_DEFAULT_FLAGS	VM_DATA_FLAGS_NON_EXEC
 
-#endif /* !__ASSEMBLER__ */
+#endif /* !__ASSEMBLY__ */
 
 #include <asm-generic/memory_model.h>
 #include <asm-generic/getorder.h>

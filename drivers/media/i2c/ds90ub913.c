@@ -203,9 +203,9 @@ static int ub913_gpio_direction_out(struct gpio_chip *gc, unsigned int offset,
 						   0));
 }
 
-static int ub913_gpio_set(struct gpio_chip *gc, unsigned int offset, int value)
+static void ub913_gpio_set(struct gpio_chip *gc, unsigned int offset, int value)
 {
-	return ub913_gpio_direction_out(gc, offset, value);
+	ub913_gpio_direction_out(gc, offset, value);
 }
 
 static int ub913_gpio_of_xlate(struct gpio_chip *gc,
@@ -336,6 +336,14 @@ static int _ub913_set_routing(struct v4l2_subdev *sd,
 	struct v4l2_subdev_stream_configs *stream_configs;
 	unsigned int i;
 	int ret;
+
+	/*
+	 * Note: we can only support up to V4L2_FRAME_DESC_ENTRY_MAX, until
+	 * frame desc is made dynamically allocated.
+	 */
+
+	if (routing->num_routes > V4L2_FRAME_DESC_ENTRY_MAX)
+		return -EINVAL;
 
 	ret = v4l2_subdev_routing_validate(sd, routing,
 					   V4L2_SUBDEV_ROUTING_ONLY_1_TO_1);

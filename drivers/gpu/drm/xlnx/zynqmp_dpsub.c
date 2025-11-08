@@ -180,6 +180,7 @@ static int zynqmp_dpsub_parse_dt(struct zynqmp_dpsub *dpsub)
 void zynqmp_dpsub_release(struct zynqmp_dpsub *dpsub)
 {
 	kfree(dpsub->disp);
+	kfree(dpsub->dp);
 	kfree(dpsub);
 }
 

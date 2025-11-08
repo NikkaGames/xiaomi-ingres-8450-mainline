@@ -7,7 +7,6 @@
 
 #define _GNU_SOURCE
 #include <errno.h>
-#include <fcntl.h>
 #include <limits.h>
 #include <linux/landlock.h>
 #include <pthread.h>

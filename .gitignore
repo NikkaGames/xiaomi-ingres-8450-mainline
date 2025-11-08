@@ -114,7 +114,6 @@ modules.order
 !.gitignore
 !.kunitconfig
 !.mailmap
-!.pylintrc
 !.rustfmt.toml
 
 #

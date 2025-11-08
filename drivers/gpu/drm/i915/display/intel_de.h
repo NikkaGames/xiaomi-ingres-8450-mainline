@@ -107,10 +107,10 @@ intel_de_rmw(struct intel_display *display, i915_reg_t reg, u32 clear, u32 set)
 static inline int
 __intel_de_wait_for_register_nowl(struct intel_display *display,
 				  i915_reg_t reg,
-				  u32 mask, u32 value, unsigned int timeout_ms)
+				  u32 mask, u32 value, unsigned int timeout)
 {
 	return intel_wait_for_register(__to_uncore(display), reg, mask,
-				       value, timeout_ms);
+				       value, timeout);
 }
 
 static inline int
@@ -125,14 +125,14 @@ __intel_de_wait_for_register_atomic_nowl(struct intel_display *display,
 
 static inline int
 intel_de_wait(struct intel_display *display, i915_reg_t reg,
-	      u32 mask, u32 value, unsigned int timeout_ms)
+	      u32 mask, u32 value, unsigned int timeout)
 {
 	int ret;
 
 	intel_dmc_wl_get(display, reg);
 
 	ret = __intel_de_wait_for_register_nowl(display, reg, mask, value,
-						timeout_ms);
+						timeout);
 
 	intel_dmc_wl_put(display, reg);
 
@@ -141,14 +141,14 @@ intel_de_wait(struct intel_display *display, i915_reg_t reg,
 
 static inline int
 intel_de_wait_fw(struct intel_display *display, i915_reg_t reg,
-		 u32 mask, u32 value, unsigned int timeout_ms, u32 *out_value)
+		 u32 mask, u32 value, unsigned int timeout)
 {
 	int ret;
 
 	intel_dmc_wl_get(display, reg);
 
 	ret = intel_wait_for_register_fw(__to_uncore(display), reg, mask,
-					 value, timeout_ms, out_value);
+					 value, timeout);
 
 	intel_dmc_wl_put(display, reg);
 
@@ -176,16 +176,16 @@ intel_de_wait_custom(struct intel_display *display, i915_reg_t reg,
 
 static inline int
 intel_de_wait_for_set(struct intel_display *display, i915_reg_t reg,
-		      u32 mask, unsigned int timeout_ms)
+		      u32 mask, unsigned int timeout)
 {
-	return intel_de_wait(display, reg, mask, mask, timeout_ms);
+	return intel_de_wait(display, reg, mask, mask, timeout);
 }
 
 static inline int
 intel_de_wait_for_clear(struct intel_display *display, i915_reg_t reg,
-			u32 mask, unsigned int timeout_ms)
+			u32 mask, unsigned int timeout)
 {
-	return intel_de_wait(display, reg, mask, 0, timeout_ms);
+	return intel_de_wait(display, reg, mask, 0, timeout);
 }
 
 /*

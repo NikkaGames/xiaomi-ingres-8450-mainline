@@ -4,7 +4,6 @@
  * Copyright (c) 2011-2017 Qualcomm Atheros, Inc.
  * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _CORE_H_
@@ -88,8 +87,6 @@
 				  IEEE80211_IFACE_SKIP_SDATA_NOT_IN_DRIVER)
 #define ATH10K_ITER_RESUME_FLAGS (IEEE80211_IFACE_ITER_RESUME_ALL |\
 				  IEEE80211_IFACE_SKIP_SDATA_NOT_IN_DRIVER)
-#define ATH10K_RECOVERY_TIMEOUT_HZ			(5 * HZ)
-#define ATH10K_RECOVERY_MAX_FAIL_COUNT			4
 
 struct ath10k;
 
@@ -782,7 +779,7 @@ enum ath10k_fw_features {
 	/* Firmware supports bypassing PLL setting on init. */
 	ATH10K_FW_FEATURE_SUPPORTS_SKIP_CLOCK_INIT = 9,
 
-	/* Raw mode support. If supported, FW supports receiving and transmitting
+	/* Raw mode support. If supported, FW supports receiving and trasmitting
 	 * frames in raw mode.
 	 */
 	ATH10K_FW_FEATURE_RAW_MODE_SUPPORT = 10,
@@ -867,6 +864,9 @@ enum ath10k_dev_flags {
 
 	/* Per Station statistics service */
 	ATH10K_FLAG_PEER_STATS,
+
+	/* Indicates that ath10k device is during recovery process and not complete */
+	ATH10K_FLAG_RESTARTING,
 
 	/* protected by conf_mutex */
 	ATH10K_FLAG_NAPI_ENABLED,
@@ -1210,11 +1210,6 @@ struct ath10k {
 	struct work_struct restart_work;
 	struct work_struct bundle_tx_work;
 	struct work_struct tx_complete_work;
-
-	atomic_t pending_recovery;
-	unsigned int recovery_count;
-	/* continuous recovery fail count */
-	atomic_t fail_cont_count;
 
 	/* cycle count is reported twice for each visited channel during scan.
 	 * access protected by data_lock

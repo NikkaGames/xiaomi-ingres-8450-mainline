@@ -15,7 +15,6 @@
 
 #include <asm/irq_cpu.h>
 #include <asm/mipsregs.h>
-#include <asm/time.h>
 
 #include "common.h"
 

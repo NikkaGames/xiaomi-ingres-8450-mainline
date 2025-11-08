@@ -1482,8 +1482,8 @@ static const struct bin_attribute edid_attr = {
 	.attr.name = "edid",
 	.attr.mode = 0666,
 	.size = EDID_LENGTH,
-	.read = edid_show,
-	.write = edid_store
+	.read_new = edid_show,
+	.write_new = edid_store
 };
 
 static const struct device_attribute fb_device_attrs[] = {

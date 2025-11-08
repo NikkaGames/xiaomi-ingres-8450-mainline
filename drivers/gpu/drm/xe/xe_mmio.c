@@ -22,9 +22,6 @@
 #include "xe_macros.h"
 #include "xe_sriov.h"
 #include "xe_trace.h"
-#include "xe_wa.h"
-
-#include "generated/xe_device_wa_oob.h"
 
 static void tiles_fini(void *arg)
 {
@@ -58,7 +55,6 @@ static void tiles_fini(void *arg)
 static void mmio_multi_tile_setup(struct xe_device *xe, size_t tile_mmio_size)
 {
 	struct xe_tile *tile;
-	struct xe_gt *gt;
 	u8 id;
 
 	/*
@@ -71,7 +67,7 @@ static void mmio_multi_tile_setup(struct xe_device *xe, size_t tile_mmio_size)
 	/* Possibly override number of tile based on configuration register */
 	if (!xe->info.skip_mtcfg) {
 		struct xe_mmio *mmio = xe_root_tile_mmio(xe);
-		u8 tile_count, gt_count;
+		u8 tile_count;
 		u32 mtcfg;
 
 		/*
@@ -88,15 +84,12 @@ static void mmio_multi_tile_setup(struct xe_device *xe, size_t tile_mmio_size)
 			xe->info.tile_count = tile_count;
 
 			/*
-			 * We've already setup gt_count according to the full
-			 * tile count.  Re-calculate it to only include the GTs
-			 * that belong to the remaining tile(s).
+			 * FIXME: Needs some work for standalone media, but
+			 * should be impossible with multi-tile for now:
+			 * multi-tile platform with standalone media doesn't
+			 * exist
 			 */
-			gt_count = 0;
-			for_each_gt(gt, xe, id)
-				if (gt->info.id < tile_count * xe->info.max_gt_per_tile)
-					gt_count++;
-			xe->info.gt_count = gt_count;
+			xe->info.gt_count = xe->info.tile_count;
 		}
 	}
 
@@ -170,7 +163,7 @@ static void mmio_flush_pending_writes(struct xe_mmio *mmio)
 #define DUMMY_REG_OFFSET	0x130030
 	int i;
 
-	if (!XE_DEVICE_WA(mmio->tile->xe, 15015404425))
+	if (mmio->tile->xe->info.platform != XE_LUNARLAKE)
 		return;
 
 	/* 4 dummy writes */
@@ -183,6 +176,7 @@ u8 xe_mmio_read8(struct xe_mmio *mmio, struct xe_reg reg)
 	u32 addr = xe_mmio_adjusted_addr(mmio, reg.addr);
 	u8 val;
 
+	/* Wa_15015404425 */
 	mmio_flush_pending_writes(mmio);
 
 	val = readb(mmio->regs + addr);
@@ -196,6 +190,7 @@ u16 xe_mmio_read16(struct xe_mmio *mmio, struct xe_reg reg)
 	u32 addr = xe_mmio_adjusted_addr(mmio, reg.addr);
 	u16 val;
 
+	/* Wa_15015404425 */
 	mmio_flush_pending_writes(mmio);
 
 	val = readw(mmio->regs + addr);
@@ -222,6 +217,7 @@ u32 xe_mmio_read32(struct xe_mmio *mmio, struct xe_reg reg)
 	u32 addr = xe_mmio_adjusted_addr(mmio, reg.addr);
 	u32 val;
 
+	/* Wa_15015404425 */
 	mmio_flush_pending_writes(mmio);
 
 	if (!reg.vf && IS_SRIOV_VF(mmio->tile->xe))

@@ -30,12 +30,12 @@ static void handle_preempt_enable(void *data, unsigned long ip, unsigned long pa
 	da_handle_start_event_scpd(preempt_enable_scpd);
 }
 
-static void handle_schedule_entry(void *data, bool preempt)
+static void handle_schedule_entry(void *data, bool preempt, unsigned long ip)
 {
 	da_handle_event_scpd(schedule_entry_scpd);
 }
 
-static void handle_schedule_exit(void *data, bool is_switch)
+static void handle_schedule_exit(void *data, bool is_switch, unsigned long ip)
 {
 	da_handle_event_scpd(schedule_exit_scpd);
 }
@@ -79,7 +79,8 @@ static struct rv_monitor rv_scpd = {
 
 static int __init register_scpd(void)
 {
-	return rv_register_monitor(&rv_scpd, &rv_sched);
+	rv_register_monitor(&rv_scpd, &rv_sched);
+	return 0;
 }
 
 static void __exit unregister_scpd(void)

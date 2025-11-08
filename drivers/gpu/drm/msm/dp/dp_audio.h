@@ -8,9 +8,8 @@
 
 #include <linux/platform_device.h>
 
+#include "dp_catalog.h"
 #include <sound/hdmi-codec.h>
-
-struct drm_bridge;
 
 /**
  * struct msm_dp_audio
@@ -28,13 +27,13 @@ struct msm_dp_audio {
  * Creates and instance of dp audio.
  *
  * @pdev: caller's platform device instance.
- * @link_base: pointer to the msm_dp_link resource.
+ * @catalog: an instance of msm_dp_catalog module.
  *
  * Returns the error code in case of failure, otherwize
  * an instance of newly created msm_dp_module.
  */
 struct msm_dp_audio *msm_dp_audio_get(struct platform_device *pdev,
-			      void __iomem *link_base);
+			struct msm_dp_catalog *catalog);
 
 /**
  * msm_dp_audio_put()
@@ -45,12 +44,12 @@ struct msm_dp_audio *msm_dp_audio_get(struct platform_device *pdev,
  */
 void msm_dp_audio_put(struct msm_dp_audio *msm_dp_audio);
 
-int msm_dp_audio_prepare(struct drm_bridge *bridge,
-			 struct drm_connector *connector,
+int msm_dp_audio_prepare(struct drm_connector *connector,
+			 struct drm_bridge *bridge,
 			 struct hdmi_codec_daifmt *daifmt,
 			 struct hdmi_codec_params *params);
-void msm_dp_audio_shutdown(struct drm_bridge *bridge,
-			   struct drm_connector *connector);
+void msm_dp_audio_shutdown(struct drm_connector *connector,
+			   struct drm_bridge *bridge);
 
 #endif /* _DP_AUDIO_H_ */
 

@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/sh -e
 # CoreSight / ASM Pure Loop (exclusive)
 
 # SPDX-License-Identifier: GPL-2.0

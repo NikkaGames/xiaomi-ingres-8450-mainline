@@ -11,7 +11,6 @@ ALL_TESTS="
 	ets_test_strict
 	ets_test_mixed
 	ets_test_dwrr
-	ets_test_plug
 	classifier_mode
 	ets_test_strict
 	ets_test_mixed

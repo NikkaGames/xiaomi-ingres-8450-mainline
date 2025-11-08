@@ -92,7 +92,7 @@ void mmu_page_dtor(void *page)
 }
 
 /* ++andreas: {get,free}_pointer_table rewritten to use unused fields from
-   struct ptdesc instead of separately kmalloced struct.  Stolen from
+   struct page instead of separately kmalloced struct.  Stolen from
    arch/sparc/mm/srmmu.c ... */
 
 typedef struct list_head ptable_desc;
@@ -103,7 +103,8 @@ static struct list_head ptable_list[3] = {
 	LIST_HEAD_INIT(ptable_list[2]),
 };
 
-#define PD_PTABLE(ptdesc) ((ptable_desc *)&(virt_to_ptdesc((void *)(ptdesc))->pt_list))
+#define PD_PTABLE(page) ((ptable_desc *)&(virt_to_page((void *)(page))->lru))
+#define PD_PAGE(ptable) (list_entry(ptable, struct page, lru))
 #define PD_PTDESC(ptable) (list_entry(ptable, struct ptdesc, pt_list))
 #define PD_MARKBITS(dp) (*(unsigned int *)&PD_PTDESC(dp)->pt_index)
 
@@ -120,10 +121,10 @@ void __init init_pointer_table(void *table, int type)
 {
 	ptable_desc *dp;
 	unsigned long ptable = (unsigned long)table;
-	unsigned long pt_addr = ptable & PAGE_MASK;
-	unsigned int mask = 1U << ((ptable - pt_addr)/ptable_size(type));
+	unsigned long page = ptable & PAGE_MASK;
+	unsigned int mask = 1U << ((ptable - page)/ptable_size(type));
 
-	dp = PD_PTABLE(pt_addr);
+	dp = PD_PTABLE(page);
 	if (!(PD_MARKBITS(dp) & mask)) {
 		PD_MARKBITS(dp) = ptable_mask(type);
 		list_add(dp, &ptable_list[type]);
@@ -132,9 +133,9 @@ void __init init_pointer_table(void *table, int type)
 	PD_MARKBITS(dp) &= ~mask;
 	pr_debug("init_pointer_table: %lx, %x\n", ptable, PD_MARKBITS(dp));
 
-	/* unreserve the ptdesc so it's possible to free that ptdesc */
-	__ClearPageReserved(ptdesc_page(PD_PTDESC(dp)));
-	init_page_count(ptdesc_page(PD_PTDESC(dp)));
+	/* unreserve the page so it's possible to free that page */
+	__ClearPageReserved(PD_PAGE(dp));
+	init_page_count(PD_PAGE(dp));
 
 	return;
 }
@@ -147,20 +148,16 @@ void *get_pointer_table(struct mm_struct *mm, int type)
 
 	/*
 	 * For a pointer table for a user process address space, a
-	 * table is taken from a ptdesc allocated for the purpose.  Each
-	 * ptdesc can hold 8 pointer tables.  The ptdesc is remapped in
+	 * table is taken from a page allocated for the purpose.  Each
+	 * page can hold 8 pointer tables.  The page is remapped in
 	 * virtual address space to be noncacheable.
 	 */
 	if (mask == 0) {
-		struct ptdesc *ptdesc;
+		void *page;
 		ptable_desc *new;
-		void *pt_addr;
 
-		ptdesc = pagetable_alloc(GFP_KERNEL | __GFP_ZERO, 0);
-		if (!ptdesc)
+		if (!(page = (void *)get_zeroed_page(GFP_KERNEL)))
 			return NULL;
-
-		pt_addr = ptdesc_address(ptdesc);
 
 		switch (type) {
 		case TABLE_PTE:
@@ -168,23 +165,23 @@ void *get_pointer_table(struct mm_struct *mm, int type)
 			 * m68k doesn't have SPLIT_PTE_PTLOCKS for not having
 			 * SMP.
 			 */
-			pagetable_pte_ctor(mm, ptdesc);
+			pagetable_pte_ctor(mm, virt_to_ptdesc(page));
 			break;
 		case TABLE_PMD:
-			pagetable_pmd_ctor(mm, ptdesc);
+			pagetable_pmd_ctor(mm, virt_to_ptdesc(page));
 			break;
 		case TABLE_PGD:
-			pagetable_pgd_ctor(ptdesc);
+			pagetable_pgd_ctor(virt_to_ptdesc(page));
 			break;
 		}
 
-		mmu_page_ctor(pt_addr);
+		mmu_page_ctor(page);
 
-		new = PD_PTABLE(pt_addr);
+		new = PD_PTABLE(page);
 		PD_MARKBITS(new) = ptable_mask(type) - 1;
 		list_add_tail(new, dp);
 
-		return (pmd_t *)pt_addr;
+		return (pmd_t *)page;
 	}
 
 	for (tmp = 1, off = 0; (mask & tmp) == 0; tmp <<= 1, off += ptable_size(type))
@@ -194,27 +191,28 @@ void *get_pointer_table(struct mm_struct *mm, int type)
 		/* move to end of list */
 		list_move_tail(dp, &ptable_list[type]);
 	}
-	return ptdesc_address(PD_PTDESC(dp)) + off;
+	return page_address(PD_PAGE(dp)) + off;
 }
 
 int free_pointer_table(void *table, int type)
 {
 	ptable_desc *dp;
 	unsigned long ptable = (unsigned long)table;
-	unsigned long pt_addr = ptable & PAGE_MASK;
-	unsigned int mask = 1U << ((ptable - pt_addr)/ptable_size(type));
+	unsigned long page = ptable & PAGE_MASK;
+	unsigned int mask = 1U << ((ptable - page)/ptable_size(type));
 
-	dp = PD_PTABLE(pt_addr);
+	dp = PD_PTABLE(page);
 	if (PD_MARKBITS (dp) & mask)
 		panic ("table already free!");
 
 	PD_MARKBITS (dp) |= mask;
 
 	if (PD_MARKBITS(dp) == ptable_mask(type)) {
-		/* all tables in ptdesc are free, free ptdesc */
+		/* all tables in page are free, free page */
 		list_del(dp);
-		mmu_page_dtor((void *)pt_addr);
-		pagetable_dtor_free(virt_to_ptdesc((void *)pt_addr));
+		mmu_page_dtor((void *)page);
+		pagetable_dtor(virt_to_ptdesc((void *)page));
+		free_page (page);
 		return 1;
 	} else if (ptable_list[type].next != dp) {
 		/*

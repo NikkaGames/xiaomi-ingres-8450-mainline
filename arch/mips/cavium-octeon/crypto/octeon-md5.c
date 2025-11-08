@@ -19,7 +19,6 @@
  * any later version.
  */
 
-#include <asm/octeon/crypto.h>
 #include <asm/octeon/octeon.h>
 #include <crypto/internal/hash.h>
 #include <crypto/md5.h>
@@ -27,6 +26,8 @@
 #include <linux/module.h>
 #include <linux/string.h>
 #include <linux/unaligned.h>
+
+#include "octeon-crypto.h"
 
 struct octeon_md5_state {
 	__le32 hash[MD5_HASH_WORDS];

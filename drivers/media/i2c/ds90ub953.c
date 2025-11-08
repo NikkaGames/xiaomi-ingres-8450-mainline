@@ -317,13 +317,14 @@ static int ub953_gpio_get(struct gpio_chip *gc, unsigned int offset)
 	return !!(v & UB953_REG_GPIO_PIN_STS_GPIO_STS(offset));
 }
 
-static int ub953_gpio_set(struct gpio_chip *gc, unsigned int offset, int value)
+static void ub953_gpio_set(struct gpio_chip *gc, unsigned int offset, int value)
 {
 	struct ub953_data *priv = gpiochip_get_data(gc);
 
-	return regmap_update_bits(priv->regmap, UB953_REG_LOCAL_GPIO_DATA,
-				  UB953_REG_LOCAL_GPIO_DATA_GPIO_OUT_SRC(offset),
-				  value ? UB953_REG_LOCAL_GPIO_DATA_GPIO_OUT_SRC(offset) : 0);
+	regmap_update_bits(priv->regmap, UB953_REG_LOCAL_GPIO_DATA,
+			   UB953_REG_LOCAL_GPIO_DATA_GPIO_OUT_SRC(offset),
+			   value ? UB953_REG_LOCAL_GPIO_DATA_GPIO_OUT_SRC(offset) :
+				   0);
 }
 
 static int ub953_gpio_of_xlate(struct gpio_chip *gc,
@@ -398,6 +399,14 @@ static int _ub953_set_routing(struct v4l2_subdev *sd,
 		.xfer_func = V4L2_XFER_FUNC_SRGB,
 	};
 	int ret;
+
+	/*
+	 * Note: we can only support up to V4L2_FRAME_DESC_ENTRY_MAX, until
+	 * frame desc is made dynamically allocated.
+	 */
+
+	if (routing->num_routes > V4L2_FRAME_DESC_ENTRY_MAX)
+		return -EINVAL;
 
 	ret = v4l2_subdev_routing_validate(sd, routing,
 					   V4L2_SUBDEV_ROUTING_ONLY_1_TO_1);

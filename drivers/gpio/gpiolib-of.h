@@ -8,7 +8,7 @@
 
 #include <linux/notifier.h>
 
-struct device_node;
+struct device;
 struct fwnode_handle;
 
 struct gpio_chip;

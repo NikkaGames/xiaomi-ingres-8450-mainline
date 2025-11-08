@@ -341,30 +341,24 @@ static int __mcp23s08_set(struct mcp23s08 *mcp, unsigned mask, bool value)
 	return mcp_update_bits(mcp, MCP_OLAT, mask, value ? mask : 0);
 }
 
-static int mcp23s08_set(struct gpio_chip *chip, unsigned int offset, int value)
+static void mcp23s08_set(struct gpio_chip *chip, unsigned offset, int value)
 {
 	struct mcp23s08	*mcp = gpiochip_get_data(chip);
 	unsigned mask = BIT(offset);
-	int ret;
 
 	mutex_lock(&mcp->lock);
-	ret = __mcp23s08_set(mcp, mask, !!value);
+	__mcp23s08_set(mcp, mask, !!value);
 	mutex_unlock(&mcp->lock);
-
-	return ret;
 }
 
-static int mcp23s08_set_multiple(struct gpio_chip *chip,
-				 unsigned long *mask, unsigned long *bits)
+static void mcp23s08_set_multiple(struct gpio_chip *chip,
+				  unsigned long *mask, unsigned long *bits)
 {
 	struct mcp23s08	*mcp = gpiochip_get_data(chip);
-	int ret;
 
 	mutex_lock(&mcp->lock);
-	ret = mcp_update_bits(mcp, MCP_OLAT, *mask, *bits);
+	mcp_update_bits(mcp, MCP_OLAT, *mask, *bits);
 	mutex_unlock(&mcp->lock);
-
-	return ret;
 }
 
 static int

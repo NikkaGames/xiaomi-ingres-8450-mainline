@@ -876,7 +876,10 @@ xchk_scrubv_open_by_handle(
 	struct xfs_inode		*ip;
 	int				error;
 
-	tp = xfs_trans_alloc_empty(mp);
+	error = xfs_trans_alloc_empty(mp, &tp);
+	if (error)
+		return NULL;
+
 	error = xfs_iget(mp, tp, head->svh_ino, XCHK_IGET_FLAGS, 0, &ip);
 	xfs_trans_cancel(tp);
 	if (error)

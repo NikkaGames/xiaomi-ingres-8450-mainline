@@ -23,6 +23,7 @@
 #include <linux/iio/sysfs.h>
 #include <linux/iio/events.h>
 
+#define ADUX1020_REGMAP_NAME		"adux1020_regmap"
 #define ADUX1020_DRV_NAME		"adux1020"
 
 /* System registers */
@@ -113,7 +114,7 @@ static const struct adux1020_mode_data adux1020_modes[] = {
 };
 
 static const struct regmap_config adux1020_regmap_config = {
-	.name = "adux1020_regmap",
+	.name = ADUX1020_REGMAP_NAME,
 	.reg_bits = 8,
 	.val_bits = 16,
 	.max_register = 0x6F,

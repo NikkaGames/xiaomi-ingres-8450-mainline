@@ -315,6 +315,14 @@ static void odm_CommonInfoSelfUpdate(struct dm_odm_t *pDM_Odm)
 		pDM_Odm->bOneEntryOnly = false;
 }
 
+static void odm_CmnInfoInit_Debug(struct dm_odm_t *pDM_Odm)
+{
+}
+
+static void odm_BasicDbgMessage(struct dm_odm_t *pDM_Odm)
+{
+}
+
 /* 3 ============================================================ */
 /* 3 RATR MASK */
 /* 3 ============================================================ */
@@ -727,6 +735,7 @@ void ODM_DMInit(struct dm_odm_t *pDM_Odm)
 {
 
 	odm_CommonInfoSelfInit(pDM_Odm);
+	odm_CmnInfoInit_Debug(pDM_Odm);
 	odm_DIGInit(pDM_Odm);
 	odm_NHMCounterStatisticsInit(pDM_Odm);
 	odm_AdaptivityInit(pDM_Odm);
@@ -752,6 +761,7 @@ void ODM_DMInit(struct dm_odm_t *pDM_Odm)
 void ODM_DMWatchdog(struct dm_odm_t *pDM_Odm)
 {
 	odm_CommonInfoSelfUpdate(pDM_Odm);
+	odm_BasicDbgMessage(pDM_Odm);
 	odm_FalseAlarmCounterStatistics(pDM_Odm);
 	odm_NHMCounterStatistics(pDM_Odm);
 

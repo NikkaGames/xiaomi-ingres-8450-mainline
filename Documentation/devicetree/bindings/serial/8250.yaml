@@ -49,24 +49,6 @@ allOf:
         - required: [ clock-frequency ]
         - required: [ clocks ]
 
-  - if:
-      properties:
-        compatible:
-          contains:
-            const: nxp,lpc1850-uart
-    then:
-      properties:
-        clock-names:
-          items:
-            - const: uartclk
-            - const: reg
-    else:
-      properties:
-        clock-names:
-          items:
-            - const: core
-            - const: bus
-
 properties:
   compatible:
     oneOf:
@@ -160,22 +142,9 @@ properties:
 
   clock-names:
     minItems: 1
-    maxItems: 2
-    oneOf:
-      - items:
-          - const: core
-          - const: bus
-      - items:
-          - const: uartclk
-          - const: reg
-
-  dmas:
-    minItems: 1
-    maxItems: 4
-
-  dma-names:
-    minItems: 1
-    maxItems: 4
+    items:
+      - const: core
+      - const: bus
 
   resets:
     maxItems: 1
@@ -268,13 +237,9 @@ if:
   properties:
     compatible:
       contains:
-        enum:
-          - spacemit,k1-uart
-          - nxp,lpc1850-uart
+        const: spacemit,k1-uart
 then:
-  required:
-    - clocks
-    - clock-names
+  required: [clock-names]
   properties:
     clocks:
       minItems: 2

@@ -11,7 +11,6 @@
 #include "wx_type.h"
 #include "wx_lib.h"
 #include "wx_sriov.h"
-#include "wx_vf.h"
 #include "wx_hw.h"
 
 static int wx_phy_read_reg_mdi(struct mii_bus *bus, int phy_addr, int devnum, int regnum)
@@ -124,11 +123,6 @@ static void wx_intr_disable(struct wx *wx, u64 qmask)
 void wx_intr_enable(struct wx *wx, u64 qmask)
 {
 	u32 mask;
-
-	if (wx->pdev->is_virtfn) {
-		wr32(wx, WX_VXIMC, qmask);
-		return;
-	}
 
 	mask = (qmask & U32_MAX);
 	if (mask)
@@ -1113,7 +1107,7 @@ static int wx_write_uc_addr_list(struct net_device *netdev, int pool)
  *  by the MO field of the MCSTCTRL. The MO field is set during initialization
  *  to mc_filter_type.
  **/
-u32 wx_mta_vector(struct wx *wx, u8 *mc_addr)
+static u32 wx_mta_vector(struct wx *wx, u8 *mc_addr)
 {
 	u32 vector = 0;
 
@@ -1833,7 +1827,7 @@ void wx_disable_rx_queue(struct wx *wx, struct wx_ring *ring)
 }
 EXPORT_SYMBOL(wx_disable_rx_queue);
 
-void wx_enable_rx_queue(struct wx *wx, struct wx_ring *ring)
+static void wx_enable_rx_queue(struct wx *wx, struct wx_ring *ring)
 {
 	u8 reg_idx = ring->reg_idx;
 	u32 rxdctl;
@@ -1849,7 +1843,6 @@ void wx_enable_rx_queue(struct wx *wx, struct wx_ring *ring)
 		       reg_idx);
 	}
 }
-EXPORT_SYMBOL(wx_enable_rx_queue);
 
 static void wx_configure_srrctl(struct wx *wx,
 				struct wx_ring *rx_ring)
@@ -2374,8 +2367,7 @@ int wx_sw_init(struct wx *wx)
 	wx->bus.device = PCI_SLOT(pdev->devfn);
 	wx->bus.func = PCI_FUNC(pdev->devfn);
 
-	if (wx->oem_svid == PCI_VENDOR_ID_WANGXUN ||
-	    pdev->is_virtfn) {
+	if (wx->oem_svid == PCI_VENDOR_ID_WANGXUN) {
 		wx->subsystem_vendor_id = pdev->subsystem_vendor;
 		wx->subsystem_device_id = pdev->subsystem_device;
 	} else {

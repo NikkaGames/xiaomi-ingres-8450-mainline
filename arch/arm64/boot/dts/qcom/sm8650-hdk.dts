@@ -894,10 +894,6 @@
 	status = "okay";
 };
 
-&iris {
-	status = "okay";
-};
-
 &gpu {
 	status = "okay";
 

@@ -39,7 +39,6 @@ properties:
       # MAC.
       - internal
       - mii
-      - mii-lite
       - gmii
       - sgmii
       - psgmii

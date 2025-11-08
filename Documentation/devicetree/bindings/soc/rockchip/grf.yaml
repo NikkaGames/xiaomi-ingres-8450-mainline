@@ -179,12 +179,10 @@ allOf:
       properties:
         gpio:
           type: object
-          properties:
-            compatible:
-              contains:
-                const: rockchip,rk3328-grf-gpio
 
-          additionalProperties: true
+          $ref: /schemas/gpio/rockchip,rk3328-grf-gpio.yaml#
+
+          unevaluatedProperties: false
 
         power-controller:
           type: object

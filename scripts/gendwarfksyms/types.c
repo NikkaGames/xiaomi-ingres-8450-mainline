@@ -6,8 +6,6 @@
 #define _GNU_SOURCE
 #include <inttypes.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <zlib.h>
 
 #include "gendwarfksyms.h"
@@ -45,7 +43,7 @@ static int type_list_append(struct list_head *list, const char *s, void *owned)
 	if (!s)
 		return 0;
 
-	entry = xmalloc(sizeof(*entry));
+	entry = xmalloc(sizeof(struct type_list_entry));
 	entry->str = s;
 	entry->owned = owned;
 	list_add_tail(&entry->list, list);
@@ -122,7 +120,7 @@ static struct type_expansion *type_map_add(const char *name,
 	struct type_expansion *e;
 
 	if (__type_map_get(name, &e)) {
-		e = xmalloc(sizeof(*e));
+		e = xmalloc(sizeof(struct type_expansion));
 		type_expansion_init(e);
 		e->name = xstrdup(name);
 
@@ -181,41 +179,20 @@ static int type_map_get(const char *name, struct type_expansion **res)
 	return -1;
 }
 
-static int cmp_expansion_name(const void *p1, const void *p2)
-{
-	struct type_expansion *const *e1 = p1;
-	struct type_expansion *const *e2 = p2;
-
-	return strcmp((*e1)->name, (*e2)->name);
-}
-
 static void type_map_write(FILE *file)
 {
 	struct type_expansion *e;
 	struct hlist_node *tmp;
-	struct type_expansion **es;
-	size_t count = 0;
-	size_t i = 0;
 
 	if (!file)
 		return;
 
-	hash_for_each_safe(type_map, e, tmp, hash)
-		++count;
-	es = xmalloc(count * sizeof(*es));
-	hash_for_each_safe(type_map, e, tmp, hash)
-		es[i++] = e;
-
-	qsort(es, count, sizeof(*es), cmp_expansion_name);
-
-	for (i = 0; i < count; ++i) {
-		checkp(fputs(es[i]->name, file));
+	hash_for_each_safe(type_map, e, tmp, hash) {
+		checkp(fputs(e->name, file));
 		checkp(fputs(" ", file));
-		type_list_write(&es[i]->expanded, file);
+		type_list_write(&e->expanded, file);
 		checkp(fputs("\n", file));
 	}
-
-	free(es);
 }
 
 static void type_map_free(void)

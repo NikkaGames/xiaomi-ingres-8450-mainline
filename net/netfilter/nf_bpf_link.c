@@ -17,7 +17,7 @@ static unsigned int nf_hook_run_bpf(void *bpf_prog, struct sk_buff *skb,
 		.skb = skb,
 	};
 
-	return bpf_prog_run_pin_on_cpu(prog, &ctx);
+	return bpf_prog_run(prog, &ctx);
 }
 
 struct bpf_nf_link {
@@ -225,8 +225,7 @@ int bpf_nf_link_attach(const union bpf_attr *attr, struct bpf_prog *prog)
 	if (!link)
 		return -ENOMEM;
 
-	bpf_link_init(&link->link, BPF_LINK_TYPE_NETFILTER, &bpf_nf_link_lops, prog,
-		      attr->link_create.attach_type);
+	bpf_link_init(&link->link, BPF_LINK_TYPE_NETFILTER, &bpf_nf_link_lops, prog);
 
 	link->hook_ops.hook = nf_hook_run_bpf;
 	link->hook_ops.hook_ops_type = NF_HOOK_OP_BPF;
@@ -294,9 +293,6 @@ static bool nf_is_valid_access(int off, int size, enum bpf_access_type type,
 			       struct bpf_insn_access_aux *info)
 {
 	if (off < 0 || off >= sizeof(struct bpf_nf_ctx))
-		return false;
-
-	if (off % size != 0)
 		return false;
 
 	if (type == BPF_WRITE)

@@ -731,19 +731,14 @@ static unsigned long rv3028_clkout_recalc_rate(struct clk_hw *hw,
 	return clkout_rates[clkout];
 }
 
-static int rv3028_clkout_determine_rate(struct clk_hw *hw,
-					struct clk_rate_request *req)
+static long rv3028_clkout_round_rate(struct clk_hw *hw, unsigned long rate,
+				     unsigned long *prate)
 {
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(clkout_rates); i++)
-		if (clkout_rates[i] <= req->rate) {
-			req->rate = clkout_rates[i];
-
-			return 0;
-		}
-
-	req->rate = clkout_rates[0];
+		if (clkout_rates[i] <= rate)
+			return clkout_rates[i];
 
 	return 0;
 }
@@ -807,7 +802,7 @@ static const struct clk_ops rv3028_clkout_ops = {
 	.unprepare = rv3028_clkout_unprepare,
 	.is_prepared = rv3028_clkout_is_prepared,
 	.recalc_rate = rv3028_clkout_recalc_rate,
-	.determine_rate = rv3028_clkout_determine_rate,
+	.round_rate = rv3028_clkout_round_rate,
 	.set_rate = rv3028_clkout_set_rate,
 };
 

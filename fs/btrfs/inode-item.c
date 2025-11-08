@@ -78,10 +78,13 @@ struct btrfs_inode_extref *btrfs_find_name_in_ext_backref(
 }
 
 /* Returns NULL if no extref found */
-struct btrfs_inode_extref *btrfs_lookup_inode_extref(struct btrfs_root *root,
-						     struct btrfs_path *path,
-						     const struct fscrypt_str *name,
-						     u64 inode_objectid, u64 ref_objectid)
+struct btrfs_inode_extref *
+btrfs_lookup_inode_extref(struct btrfs_trans_handle *trans,
+			  struct btrfs_root *root,
+			  struct btrfs_path *path,
+			  const struct fscrypt_str *name,
+			  u64 inode_objectid, u64 ref_objectid, int ins_len,
+			  int cow)
 {
 	int ret;
 	struct btrfs_key key;
@@ -90,7 +93,7 @@ struct btrfs_inode_extref *btrfs_lookup_inode_extref(struct btrfs_root *root,
 	key.type = BTRFS_INODE_EXTREF_KEY;
 	key.offset = btrfs_extref_hash(ref_objectid, name->name, name->len);
 
-	ret = btrfs_search_slot(NULL, root, &key, path, 0, 0);
+	ret = btrfs_search_slot(trans, root, &key, path, ins_len, cow);
 	if (ret < 0)
 		return ERR_PTR(ret);
 	if (ret > 0)
@@ -717,12 +720,13 @@ delete:
 	}
 out:
 	if (ret >= 0 && pending_del_nr) {
-		int ret2;
+		int err;
 
-		ret2 = btrfs_del_items(trans, root, path, pending_del_slot, pending_del_nr);
-		if (ret2) {
-			btrfs_abort_transaction(trans, ret2);
-			ret = ret2;
+		err = btrfs_del_items(trans, root, path, pending_del_slot,
+				      pending_del_nr);
+		if (err) {
+			btrfs_abort_transaction(trans, err);
+			ret = err;
 		}
 	}
 

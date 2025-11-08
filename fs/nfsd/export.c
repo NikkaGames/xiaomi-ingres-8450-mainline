@@ -82,7 +82,8 @@ static int expkey_parse(struct cache_detail *cd, char *mesg, int mlen)
 	int len;
 	struct auth_domain *dom = NULL;
 	int err;
-	u8 fsidtype;
+	int fsidtype;
+	char *ep;
 	struct svc_expkey key;
 	struct svc_expkey *ek = NULL;
 
@@ -108,9 +109,10 @@ static int expkey_parse(struct cache_detail *cd, char *mesg, int mlen)
 	err = -EINVAL;
 	if (qword_get(&mesg, buf, PAGE_SIZE) <= 0)
 		goto out;
-	if (kstrtou8(buf, 10, &fsidtype))
+	fsidtype = simple_strtoul(buf, &ep, 10);
+	if (*ep)
 		goto out;
-	dprintk("found fsidtype %u\n", fsidtype);
+	dprintk("found fsidtype %d\n", fsidtype);
 	if (key_len(fsidtype)==0) /* invalid type */
 		goto out;
 	if ((len=qword_get(&mesg, buf, PAGE_SIZE)) <= 0)

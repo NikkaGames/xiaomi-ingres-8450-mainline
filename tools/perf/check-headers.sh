@@ -4,7 +4,8 @@
 YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
-declare -a FILES=(
+declare -a FILES
+FILES=(
   "include/uapi/linux/const.h"
   "include/uapi/drm/drm.h"
   "include/uapi/drm/i915_drm.h"
@@ -72,7 +73,8 @@ declare -a FILES=(
   "scripts/syscall.tbl"
 )
 
-declare -a SYNC_CHECK_FILES=(
+declare -a SYNC_CHECK_FILES
+SYNC_CHECK_FILES=(
   "arch/x86/include/asm/inat.h"
   "arch/x86/include/asm/insn.h"
   "arch/x86/lib/inat.c"
@@ -84,7 +86,8 @@ declare -a SYNC_CHECK_FILES=(
 # tables that then gets included in .c files for things like id->string syscall
 # tables (and the reverse lookup as well: string -> id)
 
-declare -a BEAUTY_FILES=(
+declare -a BEAUTY_FILES
+BEAUTY_FILES=(
   "arch/x86/include/asm/irq_vectors.h"
   "arch/x86/include/uapi/asm/prctl.h"
   "include/linux/socket.h"

@@ -33,7 +33,7 @@
 		#size-cells = <1>;
 
 		sysc: syscon@0 {
-			compatible = "ralink,mt7628-sysc", "ralink,mt7688-sysc", "syscon";
+			compatible = "ralink,mt7628-sysc", "syscon";
 			reg = <0x0 0x60>;
 			#clock-cells = <1>;
 			#reset-cells = <1>;
@@ -134,8 +134,13 @@
 
 		watchdog: watchdog@100 {
 			compatible = "mediatek,mt7621-wdt";
-			reg = <0x100 0x100>;
-			mediatek,sysctl = <&sysc>;
+			reg = <0x100 0x30>;
+
+			resets = <&sysc 8>;
+			reset-names = "wdt";
+
+			interrupt-parent = <&intc>;
+			interrupts = <24>;
 
 			status = "disabled";
 		};

@@ -765,7 +765,7 @@ static void brcm_avs_cpufreq_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id brcm_avs_cpufreq_match[] = {
-	{ .compatible = "brcm,avs-cpu-data-mem" },
+	{ .compatible = BRCM_AVS_CPU_DATA },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, brcm_avs_cpufreq_match);

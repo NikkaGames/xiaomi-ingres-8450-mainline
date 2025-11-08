@@ -2436,7 +2436,8 @@ static int fill_fscrypt_truncate(struct inode *inode,
 		/* encrypt the last block */
 		ret = ceph_fscrypt_encrypt_block_inplace(inode, page,
 						    CEPH_FSCRYPT_BLOCK_SIZE,
-						    0, block);
+						    0, block,
+						    GFP_KERNEL);
 		if (ret)
 			goto out;
 	}

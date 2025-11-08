@@ -3008,7 +3008,7 @@ static int dw_mci_init_slot(struct dw_mci *host)
 	struct dw_mci_slot *slot;
 	int ret;
 
-	mmc = devm_mmc_alloc_host(host->dev, sizeof(*slot));
+	mmc = mmc_alloc_host(sizeof(struct dw_mci_slot), host->dev);
 	if (!mmc)
 		return -ENOMEM;
 
@@ -3024,18 +3024,18 @@ static int dw_mci_init_slot(struct dw_mci *host)
 	/*if there are external regulators, get them*/
 	ret = mmc_regulator_get_supply(mmc);
 	if (ret)
-		return ret;
+		goto err_host_allocated;
 
 	if (!mmc->ocr_avail)
 		mmc->ocr_avail = MMC_VDD_32_33 | MMC_VDD_33_34;
 
 	ret = mmc_of_parse(mmc);
 	if (ret)
-		return ret;
+		goto err_host_allocated;
 
 	ret = dw_mci_init_slot_caps(slot);
 	if (ret)
-		return ret;
+		goto err_host_allocated;
 
 	/* Useful defaults if platform data is unset. */
 	if (host->use_dma == TRANS_MODE_IDMAC) {
@@ -3065,13 +3065,17 @@ static int dw_mci_init_slot(struct dw_mci *host)
 
 	ret = mmc_add_host(mmc);
 	if (ret)
-		return ret;
+		goto err_host_allocated;
 
 #if defined(CONFIG_DEBUG_FS)
 	dw_mci_init_debugfs(slot);
 #endif
 
 	return 0;
+
+err_host_allocated:
+	mmc_free_host(mmc);
+	return ret;
 }
 
 static void dw_mci_cleanup_slot(struct dw_mci_slot *slot)
@@ -3079,6 +3083,7 @@ static void dw_mci_cleanup_slot(struct dw_mci_slot *slot)
 	/* Debugfs stuff is cleaned up by mmc core */
 	mmc_remove_host(slot->mmc);
 	slot->host->slot = NULL;
+	mmc_free_host(slot->mmc);
 }
 
 static void dw_mci_init_dma(struct dw_mci *host)

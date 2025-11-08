@@ -61,7 +61,7 @@ extern bool CONFIG_X86_64 __kconfig __weak;
 
 #define smp_mb()                                 \
 	({                                       \
-		volatile unsigned long __val;    \
+		unsigned long __val;             \
 		__sync_fetch_and_add(&__val, 0); \
 	})
 

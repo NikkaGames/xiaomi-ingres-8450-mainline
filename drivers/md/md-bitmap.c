@@ -1987,12 +1987,12 @@ static void bitmap_dirty_bits(struct mddev *mddev, unsigned long s,
 
 		md_bitmap_set_memory_bits(bitmap, sec, 1);
 		md_bitmap_file_set_bit(bitmap, sec);
-		if (sec < bitmap->mddev->resync_offset)
+		if (sec < bitmap->mddev->recovery_cp)
 			/* We are asserting that the array is dirty,
-			 * so move the resync_offset address back so
+			 * so move the recovery_cp address back so
 			 * that it is obvious that it is dirty
 			 */
-			bitmap->mddev->resync_offset = sec;
+			bitmap->mddev->recovery_cp = sec;
 	}
 }
 
@@ -2258,7 +2258,7 @@ static int bitmap_load(struct mddev *mddev)
 	    || bitmap->events_cleared == mddev->events)
 		/* no need to keep dirty bits to optimise a
 		 * re-add of a missing device */
-		start = mddev->resync_offset;
+		start = mddev->recovery_cp;
 
 	mutex_lock(&mddev->bitmap_info.mutex);
 	err = md_bitmap_init_from_disk(bitmap, start);

@@ -2137,7 +2137,7 @@ int snd_trident_pcm(struct snd_trident *trident, int device)
 
 	pcm->info_flags = 0;
 	pcm->dev_subclass = SNDRV_PCM_SUBCLASS_GENERIC_MIX;
-	strscpy(pcm->name, "Trident 4DWave");
+	strcpy(pcm->name, "Trident 4DWave");
 	trident->pcm = pcm;
 
 	if (trident->tlb.entries) {
@@ -2189,16 +2189,16 @@ int snd_trident_foldback_pcm(struct snd_trident *trident, int device)
 	else
 		snd_pcm_set_ops(foldback, SNDRV_PCM_STREAM_CAPTURE, &snd_trident_foldback_ops);
 	foldback->info_flags = 0;
-	strscpy(foldback->name, "Trident 4DWave");
+	strcpy(foldback->name, "Trident 4DWave");
 	substream = foldback->streams[SNDRV_PCM_STREAM_CAPTURE].substream;
-	strscpy(substream->name, "Front Mixer");
+	strcpy(substream->name, "Front Mixer");
 	substream = substream->next;
-	strscpy(substream->name, "Reverb Mixer");
+	strcpy(substream->name, "Reverb Mixer");
 	substream = substream->next;
-	strscpy(substream->name, "Chorus Mixer");
+	strcpy(substream->name, "Chorus Mixer");
 	if (num_chan == 4) {
 		substream = substream->next;
-		strscpy(substream->name, "Second AC'97 ADC");
+		strcpy(substream->name, "Second AC'97 ADC");
 	}
 	trident->foldback = foldback;
 
@@ -2241,7 +2241,7 @@ int snd_trident_spdif_pcm(struct snd_trident *trident, int device)
 		snd_pcm_set_ops(spdif, SNDRV_PCM_STREAM_PLAYBACK, &snd_trident_spdif_7018_ops);
 	}
 	spdif->info_flags = 0;
-	strscpy(spdif->name, "Trident 4DWave IEC958");
+	strcpy(spdif->name, "Trident 4DWave IEC958");
 	trident->spdif = spdif;
 
 	snd_pcm_set_managed_buffer_all(spdif, SNDRV_DMA_TYPE_DEV,

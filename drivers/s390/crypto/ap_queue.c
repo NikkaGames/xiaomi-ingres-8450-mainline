@@ -9,7 +9,6 @@
 #define KMSG_COMPONENT "ap"
 #define pr_fmt(fmt) KMSG_COMPONENT ": " fmt
 
-#include <linux/export.h>
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <asm/facility.h>

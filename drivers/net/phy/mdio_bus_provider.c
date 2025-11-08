@@ -152,6 +152,7 @@ static int mdiobus_create_device(struct mii_bus *bus,
 
 	strscpy(mdiodev->modalias, bi->modalias,
 		sizeof(mdiodev->modalias));
+	mdiodev->bus_match = mdio_device_bus_match;
 	mdiodev->dev.platform_data = (void *)bi->platform_data;
 
 	ret = mdio_device_register(mdiodev);
@@ -442,6 +443,9 @@ void mdiobus_unregister(struct mii_bus *bus)
 		mdiodev = bus->mdio_map[i];
 		if (!mdiodev)
 			continue;
+
+		if (mdiodev->reset_gpio)
+			gpiod_put(mdiodev->reset_gpio);
 
 		mdiodev->device_remove(mdiodev);
 		mdiodev->device_free(mdiodev);

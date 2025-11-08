@@ -46,6 +46,7 @@
 #define STK8312_ALL_CHANNEL_SIZE	3
 
 #define STK8312_DRIVER_NAME		"stk8312"
+#define STK8312_IRQ_NAME		"stk8312_event"
 
 /*
  * The accelerometer has two measurement ranges:
@@ -542,7 +543,7 @@ static int stk8312_probe(struct i2c_client *client)
 						NULL,
 						IRQF_TRIGGER_RISING |
 						IRQF_ONESHOT,
-						"stk8312_event",
+						STK8312_IRQ_NAME,
 						indio_dev);
 		if (ret < 0) {
 			dev_err(&client->dev, "request irq %d failed\n",

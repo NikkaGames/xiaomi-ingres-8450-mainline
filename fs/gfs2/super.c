@@ -487,9 +487,11 @@ static void gfs2_dirty_inode(struct inode *inode, int flags)
 	int need_endtrans = 0;
 	int ret;
 
-	/* This can only happen during incomplete inode creation. */
-	if (unlikely(!ip->i_gl))
+	if (unlikely(!ip->i_gl)) {
+		/* This can only happen during incomplete inode creation. */
+		BUG_ON(!test_bit(GIF_ALLOC_FAILED, &ip->i_flags));
 		return;
+	}
 
 	if (gfs2_withdrawing_or_withdrawn(sdp))
 		return;

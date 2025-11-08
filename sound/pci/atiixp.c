@@ -1271,7 +1271,7 @@ static int snd_atiixp_pcm_new(struct atiixp *chip)
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &snd_atiixp_playback_ops);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &snd_atiixp_capture_ops);
 	pcm->private_data = chip;
-	strscpy(pcm->name, "ATI IXP AC97");
+	strcpy(pcm->name, "ATI IXP AC97");
 	chip->pcmdevs[ATI_PCMDEV_ANALOG] = pcm;
 
 	snd_pcm_set_managed_buffer_all(pcm, SNDRV_DMA_TYPE_DEV,
@@ -1301,9 +1301,9 @@ static int snd_atiixp_pcm_new(struct atiixp *chip)
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &snd_atiixp_spdif_ops);
 	pcm->private_data = chip;
 	if (chip->spdif_over_aclink)
-		strscpy(pcm->name, "ATI IXP IEC958 (AC97)");
+		strcpy(pcm->name, "ATI IXP IEC958 (AC97)");
 	else
-		strscpy(pcm->name, "ATI IXP IEC958 (Direct)");
+		strcpy(pcm->name, "ATI IXP IEC958 (Direct)");
 	chip->pcmdevs[ATI_PCMDEV_DIGITAL] = pcm;
 
 	snd_pcm_set_managed_buffer_all(pcm, SNDRV_DMA_TYPE_DEV,
@@ -1576,8 +1576,8 @@ static int __snd_atiixp_probe(struct pci_dev *pci,
 		return err;
 	chip = card->private_data;
 
-	strscpy(card->driver, spdif_aclink ? "ATIIXP" : "ATIIXP-SPDMA");
-	strscpy(card->shortname, "ATI IXP");
+	strcpy(card->driver, spdif_aclink ? "ATIIXP" : "ATIIXP-SPDMA");
+	strcpy(card->shortname, "ATI IXP");
 	err = snd_atiixp_init(card, pci);
 	if (err < 0)
 		return err;

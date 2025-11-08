@@ -691,10 +691,9 @@ static int chipone_common_probe(struct device *dev, struct chipone **icnr)
 	struct chipone *icn;
 	int ret;
 
-	icn = devm_drm_bridge_alloc(dev, struct chipone, bridge,
-				    &chipone_bridge_funcs);
-	if (IS_ERR(icn))
-		return PTR_ERR(icn);
+	icn = devm_kzalloc(dev, sizeof(struct chipone), GFP_KERNEL);
+	if (!icn)
+		return -ENOMEM;
 
 	icn->dev = dev;
 
@@ -702,6 +701,7 @@ static int chipone_common_probe(struct device *dev, struct chipone **icnr)
 	if (ret)
 		return ret;
 
+	icn->bridge.funcs = &chipone_bridge_funcs;
 	icn->bridge.type = DRM_MODE_CONNECTOR_DPI;
 	icn->bridge.of_node = dev->of_node;
 

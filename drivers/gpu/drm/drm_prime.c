@@ -605,7 +605,6 @@ int drm_gem_map_attach(struct dma_buf *dma_buf,
 		       struct dma_buf_attachment *attach)
 {
 	struct drm_gem_object *obj = dma_buf->priv;
-	int ret;
 
 	/*
 	 * drm_gem_map_dma_buf() requires obj->get_sg_table(), but drivers
@@ -615,16 +614,7 @@ int drm_gem_map_attach(struct dma_buf *dma_buf,
 	    !obj->funcs->get_sg_table)
 		return -ENOSYS;
 
-	if (!obj->funcs->pin)
-		return 0;
-
-	ret = dma_resv_lock(obj->resv, NULL);
-	if (ret)
-		return ret;
-	ret = obj->funcs->pin(obj);
-	dma_resv_unlock(obj->resv);
-
-	return ret;
+	return drm_gem_pin(obj);
 }
 EXPORT_SYMBOL(drm_gem_map_attach);
 
@@ -641,16 +631,8 @@ void drm_gem_map_detach(struct dma_buf *dma_buf,
 			struct dma_buf_attachment *attach)
 {
 	struct drm_gem_object *obj = dma_buf->priv;
-	int ret;
 
-	if (!obj->funcs->unpin)
-		return;
-
-	ret = dma_resv_lock(obj->resv, NULL);
-	if (drm_WARN_ON(obj->dev, ret))
-		return;
-	obj->funcs->unpin(obj);
-	dma_resv_unlock(obj->resv);
+	drm_gem_unpin(obj);
 }
 EXPORT_SYMBOL(drm_gem_map_detach);
 
@@ -934,26 +916,6 @@ struct dma_buf *drm_gem_prime_export(struct drm_gem_object *obj,
 }
 EXPORT_SYMBOL(drm_gem_prime_export);
 
-
-/**
- * drm_gem_is_prime_exported_dma_buf -
- * checks if the DMA-BUF was exported from a GEM object belonging to @dev.
- * @dev: drm_device to check against
- * @dma_buf: dma-buf object to import
- *
- * Return: true if the DMA-BUF was exported from a GEM object belonging
- * to @dev, false otherwise.
- */
-
-bool drm_gem_is_prime_exported_dma_buf(struct drm_device *dev,
-				       struct dma_buf *dma_buf)
-{
-	struct drm_gem_object *obj = dma_buf->priv;
-
-	return (dma_buf->ops == &drm_gem_prime_dmabuf_ops) && (obj->dev == dev);
-}
-EXPORT_SYMBOL(drm_gem_is_prime_exported_dma_buf);
-
 /**
  * drm_gem_prime_import_dev - core implementation of the import callback
  * @dev: drm_device to import into
@@ -977,14 +939,16 @@ struct drm_gem_object *drm_gem_prime_import_dev(struct drm_device *dev,
 	struct drm_gem_object *obj;
 	int ret;
 
-	if (drm_gem_is_prime_exported_dma_buf(dev, dma_buf)) {
-		/*
-		 * Importing dmabuf exported from our own gem increases
-		 * refcount on gem itself instead of f_count of dmabuf.
-		 */
+	if (dma_buf->ops == &drm_gem_prime_dmabuf_ops) {
 		obj = dma_buf->priv;
-		drm_gem_object_get(obj);
-		return obj;
+		if (obj->dev == dev) {
+			/*
+			 * Importing dmabuf exported from our own gem increases
+			 * refcount on gem itself instead of f_count of dmabuf.
+			 */
+			drm_gem_object_get(obj);
+			return obj;
+		}
 	}
 
 	if (!dev->driver->gem_prime_import_sg_table)

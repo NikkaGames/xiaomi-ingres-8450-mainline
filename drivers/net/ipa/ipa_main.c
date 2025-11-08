@@ -9,7 +9,7 @@
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/of_reserved_mem.h>
+#include <linux/of_address.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/types.h>
@@ -586,6 +586,7 @@ static void ipa_deconfig(struct ipa *ipa)
 static int ipa_firmware_load(struct device *dev)
 {
 	const struct firmware *fw;
+	struct device_node *node;
 	struct resource res;
 	phys_addr_t phys;
 	const char *path;
@@ -593,7 +594,14 @@ static int ipa_firmware_load(struct device *dev)
 	void *virt;
 	int ret;
 
-	ret = of_reserved_mem_region_to_resource(dev->of_node, 0, &res);
+	node = of_parse_phandle(dev->of_node, "memory-region", 0);
+	if (!node) {
+		dev_err(dev, "DT error getting \"memory-region\" property\n");
+		return -EINVAL;
+	}
+
+	ret = of_address_to_resource(node, 0, &res);
+	of_node_put(node);
 	if (ret) {
 		dev_err(dev, "error %d getting \"memory-region\" resource\n",
 			ret);

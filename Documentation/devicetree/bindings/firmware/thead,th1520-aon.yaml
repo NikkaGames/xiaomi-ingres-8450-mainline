@@ -32,13 +32,6 @@ properties:
     items:
       - const: aon
 
-  resets:
-    maxItems: 1
-
-  reset-names:
-    items:
-      - const: gpu-clkgen
-
   "#power-domain-cells":
     const: 1
 

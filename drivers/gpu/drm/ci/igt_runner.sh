@@ -19,7 +19,6 @@ set +e
 cat /sys/kernel/debug/dri/*/state
 set -e
 
-mkdir -p /lib/modules
 case "$DRIVER_NAME" in
     amdgpu|vkms)
         # Cannot use HWCI_KERNEL_MODULES as at that point we don't have the module in /lib

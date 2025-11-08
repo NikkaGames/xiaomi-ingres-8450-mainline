@@ -8,19 +8,17 @@
 #define pr_fmt(fmt)	"trace_uprobe: " fmt
 
 #include <linux/bpf-cgroup.h>
-#include <linux/cleanup.h>
-#include <linux/ctype.h>
-#include <linux/filter.h>
-#include <linux/module.h>
-#include <linux/namei.h>
-#include <linux/percpu.h>
-#include <linux/rculist.h>
 #include <linux/security.h>
-#include <linux/string.h>
+#include <linux/ctype.h>
+#include <linux/module.h>
 #include <linux/uaccess.h>
 #include <linux/uprobes.h>
+#include <linux/namei.h>
+#include <linux/string.h>
+#include <linux/rculist.h>
+#include <linux/filter.h>
+#include <linux/percpu.h>
 
-#include "trace.h"
 #include "trace_dynevent.h"
 #include "trace_probe.h"
 #include "trace_probe_tmpl.h"
@@ -539,15 +537,15 @@ static int register_trace_uprobe(struct trace_uprobe *tu)
  */
 static int __trace_uprobe_create(int argc, const char **argv)
 {
+	struct trace_uprobe *tu;
 	const char *event = NULL, *group = UPROBE_EVENT_SYSTEM;
 	char *arg, *filename, *rctr, *rctr_end, *tmp;
-	unsigned long offset, ref_ctr_offset;
-	char *gbuf __free(kfree) = NULL;
-	char *buf __free(kfree) = NULL;
+	char buf[MAX_EVENT_NAME_LEN];
+	char gbuf[MAX_EVENT_NAME_LEN];
 	enum probe_print_type ptype;
-	struct trace_uprobe *tu;
-	bool is_return = false;
 	struct path path;
+	unsigned long offset, ref_ctr_offset;
+	bool is_return = false;
 	int i, ret;
 
 	ref_ctr_offset = 0;
@@ -655,10 +653,6 @@ static int __trace_uprobe_create(int argc, const char **argv)
 	/* setup a probe */
 	trace_probe_log_set_index(0);
 	if (event) {
-		gbuf = kmalloc(MAX_EVENT_NAME_LEN, GFP_KERNEL);
-		if (!gbuf)
-			goto fail_mem;
-
 		ret = traceprobe_parse_event_name(&event, &group, gbuf,
 						  event - argv[0]);
 		if (ret)
@@ -670,16 +664,15 @@ static int __trace_uprobe_create(int argc, const char **argv)
 		char *ptr;
 
 		tail = kstrdup(kbasename(filename), GFP_KERNEL);
-		if (!tail)
-			goto fail_mem;
+		if (!tail) {
+			ret = -ENOMEM;
+			goto fail_address_parse;
+		}
 
 		ptr = strpbrk(tail, ".-_");
 		if (ptr)
 			*ptr = '\0';
 
-		buf = kmalloc(MAX_EVENT_NAME_LEN, GFP_KERNEL);
-		if (!buf)
-			goto fail_mem;
 		snprintf(buf, MAX_EVENT_NAME_LEN, "%c_%s_0x%lx", 'p', tail, offset);
 		event = buf;
 		kfree(tail);
@@ -702,16 +695,13 @@ static int __trace_uprobe_create(int argc, const char **argv)
 
 	/* parse arguments */
 	for (i = 0; i < argc; i++) {
-		struct traceprobe_parse_context *ctx __free(traceprobe_parse_context)
-			= kzalloc(sizeof(*ctx), GFP_KERNEL);
+		struct traceprobe_parse_context ctx = {
+			.flags = (is_return ? TPARG_FL_RETURN : 0) | TPARG_FL_USER,
+		};
 
-		if (!ctx) {
-			ret = -ENOMEM;
-			goto error;
-		}
-		ctx->flags = (is_return ? TPARG_FL_RETURN : 0) | TPARG_FL_USER;
 		trace_probe_log_set_index(i + 2);
-		ret = traceprobe_parse_probe_arg(&tu->tp, i, argv[i], ctx);
+		ret = traceprobe_parse_probe_arg(&tu->tp, i, argv[i], &ctx);
+		traceprobe_finish_parse(&ctx);
 		if (ret)
 			goto error;
 	}
@@ -730,9 +720,6 @@ error:
 out:
 	trace_probe_log_clear();
 	return ret;
-
-fail_mem:
-	ret = -ENOMEM;
 
 fail_address_parse:
 	trace_probe_log_clear();

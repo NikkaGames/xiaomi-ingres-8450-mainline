@@ -2170,8 +2170,9 @@ static int sysc_reset(struct sysc *ddata)
 static int sysc_init_module(struct sysc *ddata)
 {
 	bool rstctrl_deasserted = false;
-	int error = sysc_clockdomain_init(ddata);
+	int error = 0;
 
+	error = sysc_clockdomain_init(ddata);
 	if (error)
 		return error;
 

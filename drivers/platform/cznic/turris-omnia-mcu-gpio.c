@@ -439,28 +439,27 @@ static int omnia_gpio_get_multiple(struct gpio_chip *gc, unsigned long *mask,
 	return 0;
 }
 
-static int omnia_gpio_set(struct gpio_chip *gc, unsigned int offset, int value)
+static void omnia_gpio_set(struct gpio_chip *gc, unsigned int offset, int value)
 {
 	const struct omnia_gpio *gpio = &omnia_gpios[offset];
 	struct omnia_mcu *mcu = gpiochip_get_data(gc);
 	u16 val, mask;
 
 	if (!gpio->ctl_cmd)
-		return -EINVAL;
+		return;
 
 	mask = BIT(gpio->ctl_bit);
 	val = value ? mask : 0;
 
-	return omnia_ctl_cmd(mcu, gpio->ctl_cmd, val, mask);
+	omnia_ctl_cmd(mcu, gpio->ctl_cmd, val, mask);
 }
 
-static int omnia_gpio_set_multiple(struct gpio_chip *gc, unsigned long *mask,
-				   unsigned long *bits)
+static void omnia_gpio_set_multiple(struct gpio_chip *gc, unsigned long *mask,
+				    unsigned long *bits)
 {
 	unsigned long ctl = 0, ctl_mask = 0, ext_ctl = 0, ext_ctl_mask = 0;
 	struct omnia_mcu *mcu = gpiochip_get_data(gc);
 	unsigned int i;
-	int err;
 
 	for_each_set_bit(i, mask, ARRAY_SIZE(omnia_gpios)) {
 		unsigned long *field, *field_mask;
@@ -489,21 +488,13 @@ static int omnia_gpio_set_multiple(struct gpio_chip *gc, unsigned long *mask,
 
 	guard(mutex)(&mcu->lock);
 
-	if (ctl_mask) {
-		err = omnia_ctl_cmd_locked(mcu, OMNIA_CMD_GENERAL_CONTROL,
-					   ctl, ctl_mask);
-		if (err)
-			return err;
-	}
+	if (ctl_mask)
+		omnia_ctl_cmd_locked(mcu, OMNIA_CMD_GENERAL_CONTROL,
+				     ctl, ctl_mask);
 
-	if (ext_ctl_mask) {
-		err = omnia_ctl_cmd_locked(mcu, OMNIA_CMD_EXT_CONTROL,
-					   ext_ctl, ext_ctl_mask);
-		if (err)
-			return err;
-	}
-
-	return 0;
+	if (ext_ctl_mask)
+		omnia_ctl_cmd_locked(mcu, OMNIA_CMD_EXT_CONTROL,
+				     ext_ctl, ext_ctl_mask);
 }
 
 static bool omnia_gpio_available(struct omnia_mcu *mcu,

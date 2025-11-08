@@ -207,10 +207,8 @@ replay_again:
 	server = cifs_pick_channel(ses);
 
 	vars = kzalloc(sizeof(*vars), GFP_ATOMIC);
-	if (vars == NULL) {
-		rc = -ENOMEM;
-		goto out;
-	}
+	if (vars == NULL)
+		return -ENOMEM;
 	rqst = &vars->rqst[0];
 	rsp_iov = &vars->rsp_iov[0];
 
@@ -866,7 +864,6 @@ finished:
 	    smb2_should_replay(tcon, &retries, &cur_sleep))
 		goto replay_again;
 
-out:
 	if (cfile)
 		cifsFileInfo_put(cfile);
 
@@ -1061,11 +1058,10 @@ int smb2_query_path_info(const unsigned int xid,
 		 * Skip SMB2_OP_GET_REPARSE if symlink already parsed in create
 		 * response.
 		 */
-		if (data->reparse.tag != IO_REPARSE_TAG_SYMLINK) {
+		if (data->reparse.tag != IO_REPARSE_TAG_SYMLINK)
 			cmds[num_cmds++] = SMB2_OP_GET_REPARSE;
-			if (!tcon->posix_extensions)
-				cmds[num_cmds++] = SMB2_OP_QUERY_WSL_EA;
-		}
+		if (!tcon->posix_extensions)
+			cmds[num_cmds++] = SMB2_OP_QUERY_WSL_EA;
 
 		oparms = CIFS_OPARMS(cifs_sb, tcon, full_path,
 				     FILE_READ_ATTRIBUTES |
@@ -1324,7 +1320,7 @@ smb2_set_file_info(struct inode *inode, const char *full_path,
 	return rc;
 }
 
-struct inode *smb2_create_reparse_inode(struct cifs_open_info_data *data,
+struct inode *smb2_get_reparse_inode(struct cifs_open_info_data *data,
 				     struct super_block *sb,
 				     const unsigned int xid,
 				     struct cifs_tcon *tcon,
@@ -1349,8 +1345,9 @@ struct inode *smb2_create_reparse_inode(struct cifs_open_info_data *data,
 	 * attempt to create reparse point. This will prevent creating unusable
 	 * empty object on the server.
 	 */
-	if (!CIFS_REPARSE_SUPPORT(tcon))
-		return ERR_PTR(-EOPNOTSUPP);
+	if (!(le32_to_cpu(tcon->fsAttrInfo.Attributes) & FILE_SUPPORTS_REPARSE_POINTS))
+		if (!tcon->posix_extensions)
+			return ERR_PTR(-EOPNOTSUPP);
 
 	oparms = CIFS_OPARMS(cifs_sb, tcon, full_path,
 			     SYNCHRONIZE | DELETE |

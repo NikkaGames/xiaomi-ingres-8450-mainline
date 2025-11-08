@@ -6,8 +6,6 @@
 #include <linux/string_helpers.h>
 #include <linux/suspend.h>
 
-#include "display/intel_display_power.h"
-
 #include "i915_drv.h"
 #include "i915_irq.h"
 #include "i915_params.h"
@@ -72,7 +70,7 @@ static int __gt_unpark(struct intel_wakeref *wf)
 {
 	struct intel_gt *gt = container_of(wf, typeof(*gt), wakeref);
 	struct drm_i915_private *i915 = gt->i915;
-	struct intel_display *display = i915->display;
+	struct intel_display *display = &i915->display;
 
 	GT_TRACE(gt, "\n");
 
@@ -106,7 +104,7 @@ static int __gt_park(struct intel_wakeref *wf)
 	struct intel_gt *gt = container_of(wf, typeof(*gt), wakeref);
 	intel_wakeref_t wakeref = fetch_and_zero(&gt->awake);
 	struct drm_i915_private *i915 = gt->i915;
-	struct intel_display *display = i915->display;
+	struct intel_display *display = &i915->display;
 
 	GT_TRACE(gt, "\n");
 

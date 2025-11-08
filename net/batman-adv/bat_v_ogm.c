@@ -22,6 +22,7 @@
 #include <linux/mutex.h>
 #include <linux/netdevice.h>
 #include <linux/random.h>
+#include <linux/rculist.h>
 #include <linux/rcupdate.h>
 #include <linux/skbuff.h>
 #include <linux/slab.h>
@@ -32,6 +33,7 @@
 #include <linux/workqueue.h>
 #include <uapi/linux/batadv_packet.h>
 
+#include "bat_algo.h"
 #include "hard-interface.h"
 #include "hash.h"
 #include "log.h"
@@ -263,7 +265,6 @@ static void batadv_v_ogm_send_meshif(struct batadv_priv *bat_priv)
 	struct batadv_ogm2_packet *ogm_packet;
 	struct sk_buff *skb, *skb_tmp;
 	unsigned char *ogm_buff;
-	struct list_head *iter;
 	int ogm_buff_len;
 	u16 tvlv_len = 0;
 	int ret;
@@ -300,7 +301,10 @@ static void batadv_v_ogm_send_meshif(struct batadv_priv *bat_priv)
 
 	/* broadcast on every interface */
 	rcu_read_lock();
-	netdev_for_each_lower_private_rcu(bat_priv->mesh_iface, hard_iface, iter) {
+	list_for_each_entry_rcu(hard_iface, &batadv_hardif_list, list) {
+		if (hard_iface->mesh_iface != bat_priv->mesh_iface)
+			continue;
+
 		if (!kref_get_unless_zero(&hard_iface->refcount))
 			continue;
 
@@ -855,7 +859,6 @@ static void batadv_v_ogm_process(const struct sk_buff *skb, int ogm_offset,
 	struct batadv_hard_iface *hard_iface;
 	struct batadv_ogm2_packet *ogm_packet;
 	u32 ogm_throughput, link_throughput, path_throughput;
-	struct list_head *iter;
 	int ret;
 
 	ethhdr = eth_hdr(skb);
@@ -918,8 +921,11 @@ static void batadv_v_ogm_process(const struct sk_buff *skb, int ogm_offset,
 				       BATADV_IF_DEFAULT);
 
 	rcu_read_lock();
-	netdev_for_each_lower_private_rcu(bat_priv->mesh_iface, hard_iface, iter) {
+	list_for_each_entry_rcu(hard_iface, &batadv_hardif_list, list) {
 		if (hard_iface->if_status != BATADV_IF_ACTIVE)
+			continue;
+
+		if (hard_iface->mesh_iface != bat_priv->mesh_iface)
 			continue;
 
 		if (!kref_get_unless_zero(&hard_iface->refcount))

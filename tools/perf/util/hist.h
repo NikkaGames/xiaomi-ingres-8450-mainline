@@ -255,8 +255,7 @@ struct hist_entry {
 	u64			code_page_size;
 	u64			weight;
 	u64			ins_lat;
-	/** @weight3: On x86 holds retire_lat, on powerpc holds p_stage_cyc. */
-	u64			weight3;
+	u64			p_stage_cyc;
 	s32			socket;
 	s32			cpu;
 	int			parallelism;

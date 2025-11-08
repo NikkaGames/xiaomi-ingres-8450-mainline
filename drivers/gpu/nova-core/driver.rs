@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 
-use kernel::{auxiliary, bindings, c_str, device::Core, pci, prelude::*, sizes::SZ_16M, sync::Arc};
+use kernel::{auxiliary, bindings, c_str, device::Core, pci, prelude::*};
 
 use crate::gpu::Gpu;
 
@@ -11,7 +11,7 @@ pub(crate) struct NovaCore {
     _reg: auxiliary::Registration,
 }
 
-const BAR0_SIZE: usize = SZ_16M;
+const BAR0_SIZE: usize = 8;
 pub(crate) type Bar0 = pci::Bar<BAR0_SIZE>;
 
 kernel::pci_device_table!(
@@ -19,7 +19,7 @@ kernel::pci_device_table!(
     MODULE_PCI_TABLE,
     <NovaCore as pci::Driver>::IdInfo,
     [(
-        pci::DeviceId::from_id(bindings::PCI_VENDOR_ID_NVIDIA, bindings::PCI_ANY_ID as u32),
+        pci::DeviceId::from_id(bindings::PCI_VENDOR_ID_NVIDIA, bindings::PCI_ANY_ID as _),
         ()
     )]
 );
@@ -34,10 +34,7 @@ impl pci::Driver for NovaCore {
         pdev.enable_device_mem()?;
         pdev.set_master();
 
-        let bar = Arc::pin_init(
-            pdev.iomap_region_sized::<BAR0_SIZE>(0, c_str!("nova-core/bar0")),
-            GFP_KERNEL,
-        )?;
+        let bar = pdev.iomap_region_sized::<BAR0_SIZE>(0, c_str!("nova-core/bar0"))?;
 
         let this = KBox::pin_init(
             try_pin_init!(Self {
@@ -45,7 +42,7 @@ impl pci::Driver for NovaCore {
                 _reg: auxiliary::Registration::new(
                     pdev.as_ref(),
                     c_str!("nova-drm"),
-                    0, // TODO[XARR]: Once it lands, use XArray; for now we don't use the ID.
+                    0, // TODO: Once it lands, use XArray; for now we don't use the ID.
                     crate::MODULE_NAME
                 )?,
             }),

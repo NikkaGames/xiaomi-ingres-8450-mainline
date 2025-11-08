@@ -108,10 +108,8 @@ extern unsigned long dac_mmap_min_addr;
 #define CAP_IPC_LOCK         14
 
 #ifdef CONFIG_64BIT
-#define VM_SEALED_BIT	42
-#define VM_SEALED	BIT(VM_SEALED_BIT)
-#else
-#define VM_SEALED	VM_NONE
+/* VM is sealed, in vm_flags */
+#define VM_SEALED	_BITUL(63)
 #endif
 
 #define FIRST_USER_ADDRESS	0UL
@@ -578,7 +576,7 @@ static inline pgprot_t pgprot_modify(pgprot_t oldprot, pgprot_t newprot)
 	return __pgprot(pgprot_val(oldprot) | pgprot_val(newprot));
 }
 
-static inline pgprot_t vm_get_page_prot(vm_flags_t vm_flags)
+static inline pgprot_t vm_get_page_prot(unsigned long vm_flags)
 {
 	return __pgprot(vm_flags);
 }
@@ -1086,7 +1084,7 @@ static inline bool mpol_equal(struct mempolicy *, struct mempolicy *)
 }
 
 static inline void khugepaged_enter_vma(struct vm_area_struct *vma,
-			  vm_flags_t vm_flags)
+			  unsigned long vm_flags)
 {
 	(void)vma;
 	(void)vm_flags;
@@ -1202,7 +1200,7 @@ bool vma_wants_writenotify(struct vm_area_struct *vma, pgprot_t vm_page_prot);
 /* Update vma->vm_page_prot to reflect vma->vm_flags. */
 static inline void vma_set_page_prot(struct vm_area_struct *vma)
 {
-	vm_flags_t vm_flags = vma->vm_flags;
+	unsigned long vm_flags = vma->vm_flags;
 	pgprot_t vm_page_prot;
 
 	/* testing: we inline vm_pgprot_modify() to avoid clash with vma.h. */
@@ -1217,7 +1215,7 @@ static inline void vma_set_page_prot(struct vm_area_struct *vma)
 	WRITE_ONCE(vma->vm_page_prot, vm_page_prot);
 }
 
-static inline bool arch_validate_flags(vm_flags_t)
+static inline bool arch_validate_flags(unsigned long)
 {
 	return true;
 }
@@ -1282,12 +1280,12 @@ static inline bool capable(int cap)
 	return true;
 }
 
-static inline bool mlock_future_ok(struct mm_struct *mm, vm_flags_t vm_flags,
+static inline bool mlock_future_ok(struct mm_struct *mm, unsigned long flags,
 			unsigned long bytes)
 {
 	unsigned long locked_pages, limit_pages;
 
-	if (!(vm_flags & VM_LOCKED) || capable(CAP_IPC_LOCK))
+	if (!(flags & VM_LOCKED) || capable(CAP_IPC_LOCK))
 		return true;
 
 	locked_pages = bytes >> PAGE_SHIFT;
@@ -1444,29 +1442,8 @@ static inline void free_anon_vma_name(struct vm_area_struct *vma)
 	(void)vma;
 }
 
-/* Declared in vma.h. */
-static inline void set_vma_from_desc(struct vm_area_struct *vma,
-		struct vm_area_desc *desc);
-
-static inline struct vm_area_desc *vma_to_desc(struct vm_area_struct *vma,
-		struct vm_area_desc *desc);
-
-static int compat_vma_mmap_prepare(struct file *file,
-		struct vm_area_struct *vma)
-{
-	struct vm_area_desc desc;
-	int err;
-
-	err = file->f_op->mmap_prepare(vma_to_desc(vma, &desc));
-	if (err)
-		return err;
-	set_vma_from_desc(vma, &desc);
-
-	return 0;
-}
-
 /* Did the driver provide valid mmap hook configuration? */
-static inline bool can_mmap_file(struct file *file)
+static inline bool file_has_valid_mmap_hooks(struct file *file)
 {
 	bool has_mmap = file->f_op->mmap;
 	bool has_mmap_prepare = file->f_op->mmap_prepare;
@@ -1474,21 +1451,22 @@ static inline bool can_mmap_file(struct file *file)
 	/* Hooks are mutually exclusive. */
 	if (WARN_ON_ONCE(has_mmap && has_mmap_prepare))
 		return false;
-	if (!has_mmap && !has_mmap_prepare)
+	if (WARN_ON_ONCE(!has_mmap && !has_mmap_prepare))
 		return false;
 
 	return true;
 }
 
-static inline int vfs_mmap(struct file *file, struct vm_area_struct *vma)
+static inline int call_mmap(struct file *file, struct vm_area_struct *vma)
 {
-	if (file->f_op->mmap_prepare)
-		return compat_vma_mmap_prepare(file, vma);
+	if (WARN_ON_ONCE(file->f_op->mmap_prepare))
+		return -EINVAL;
 
 	return file->f_op->mmap(file, vma);
 }
 
-static inline int vfs_mmap_prepare(struct file *file, struct vm_area_desc *desc)
+static inline int __call_mmap_prepare(struct file *file,
+		struct vm_area_desc *desc)
 {
 	return file->f_op->mmap_prepare(desc);
 }
@@ -1504,17 +1482,6 @@ static inline void vma_set_file(struct vm_area_struct *vma, struct file *file)
 	get_file(file);
 	swap(vma->vm_file, file);
 	fput(file);
-}
-
-static inline bool shmem_file(struct file *)
-{
-	return false;
-}
-
-static inline vm_flags_t ksm_vma_flags(const struct mm_struct *, const struct file *,
-			 vm_flags_t vm_flags)
-{
-	return vm_flags;
 }
 
 #endif	/* __MM_VMA_INTERNAL_H */

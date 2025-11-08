@@ -56,7 +56,7 @@
 		led-power-green {
 			label = "smartgw:power:green";
 			gpios = <&gpio 19 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "timer";
+			default-state = "off";
 		};
 
 		led-power-red {

@@ -63,7 +63,10 @@ struct crypto_acomp_stream {
 struct crypto_acomp_streams {
 	/* These must come first because of struct scomp_alg. */
 	void *(*alloc_ctx)(void);
-	void (*free_ctx)(void *);
+	union {
+		void (*free_ctx)(void *);
+		void (*cfree_ctx)(const void *);
+	};
 
 	struct crypto_acomp_stream __percpu *streams;
 	struct work_struct stream_work;

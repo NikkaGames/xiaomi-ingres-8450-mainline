@@ -1099,7 +1099,6 @@ notication||notification
 notications||notifications
 notifcations||notifications
 notifed||notified
-notifer||notifier
 notity||notify
 notfify||notify
 nubmer||number

@@ -2,7 +2,6 @@
 /*
  * /proc/schedstat implementation
  */
-#include "sched.h"
 
 void __update_stats_wait_start(struct rq *rq, struct task_struct *p,
 			       struct sched_statistics *stats)
@@ -115,8 +114,10 @@ static int show_schedstat(struct seq_file *seq, void *v)
 		seq_printf(seq, "timestamp %lu\n", jiffies);
 	} else {
 		struct rq *rq;
+#ifdef CONFIG_SMP
 		struct sched_domain *sd;
 		int dcount = 0;
+#endif
 		cpu = (unsigned long)(v - 2);
 		rq = cpu_rq(cpu);
 
@@ -131,6 +132,7 @@ static int show_schedstat(struct seq_file *seq, void *v)
 
 		seq_printf(seq, "\n");
 
+#ifdef CONFIG_SMP
 		/* domain-specific stats */
 		rcu_read_lock();
 		for_each_domain(cpu, sd) {
@@ -161,6 +163,7 @@ static int show_schedstat(struct seq_file *seq, void *v)
 			    sd->ttwu_move_balance);
 		}
 		rcu_read_unlock();
+#endif
 	}
 	return 0;
 }

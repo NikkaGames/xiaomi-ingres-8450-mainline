@@ -191,16 +191,6 @@ static int __init early_parse_mem(char *p)
 		return -EINVAL;
 	}
 
-	start = 0;
-	size = memparse(p, &p);
-	if (*p == '@')	/* Every mem=... should contain '@' */
-		start = memparse(p + 1, &p);
-	else {		/* Only one mem=... is allowed if no '@' */
-		usermem = 1;
-		memblock_enforce_memory_limit(size);
-		return 0;
-	}
-
 	/*
 	 * If a user specifies memory size, we
 	 * blow away any automatically generated
@@ -210,6 +200,14 @@ static int __init early_parse_mem(char *p)
 		usermem = 1;
 		memblock_remove(memblock_start_of_DRAM(),
 			memblock_end_of_DRAM() - memblock_start_of_DRAM());
+	}
+	start = 0;
+	size = memparse(p, &p);
+	if (*p == '@')
+		start = memparse(p + 1, &p);
+	else {
+		pr_err("Invalid format!\n");
+		return -EINVAL;
 	}
 
 	if (!IS_ENABLED(CONFIG_NUMA))
@@ -267,7 +265,7 @@ static void __init arch_reserve_crashkernel(void)
 		return;
 
 	ret = parse_crashkernel(boot_command_line, memblock_phys_mem_size(),
-				&crash_size, &crash_base, &low_size, NULL, &high);
+				&crash_size, &crash_base, &low_size, &high);
 	if (ret)
 		return;
 

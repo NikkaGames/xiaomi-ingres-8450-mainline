@@ -18,8 +18,6 @@ description: |-
   The camera module does not expose the model through registers, so the
   exact model needs to be specified.
 
-$ref: /schemas/media/video-interface-devices.yaml#
-
 properties:
   compatible:
     enum:
@@ -83,7 +81,7 @@ required:
   - reg
   - port
 
-unevaluatedProperties: false
+additionalProperties: false
 
 examples:
   - |

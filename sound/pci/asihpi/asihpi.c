@@ -1257,7 +1257,7 @@ static int snd_card_asihpi_pcm_new(struct snd_card_asihpi *asihpi, int device)
 
 	pcm->private_data = asihpi;
 	pcm->info_flags = 0;
-	strscpy(pcm->name, "Asihpi PCM");
+	strcpy(pcm->name, "Asihpi PCM");
 
 	/*? do we want to emulate MMAP for non-BBM cards?
 	Jack doesn't work with ALSAs MMAP emulation - WHY NOT? */
@@ -2310,7 +2310,7 @@ static int snd_asihpi_clksrc_info(struct snd_kcontrol *kcontrol,
 		uinfo->value.enumerated.item =
 				uinfo->value.enumerated.items - 1;
 
-	strscpy(uinfo->value.enumerated.name,
+	strcpy(uinfo->value.enumerated.name,
 	       clkcache->s[uinfo->value.enumerated.item].name);
 	return 0;
 }
@@ -2530,7 +2530,7 @@ static int snd_card_asihpi_mixer_new(struct snd_card_asihpi *asihpi)
 	if (snd_BUG_ON(!asihpi))
 		return -EINVAL;
 	card = asihpi->card;
-	strscpy(card->mixername, "Asihpi Mixer");
+	strcpy(card->mixername, "Asihpi Mixer");
 
 	err =
 	    hpi_mixer_open(asihpi->hpi->adapter->index,
@@ -2741,7 +2741,7 @@ static int snd_asihpi_hpi_new(struct snd_card_asihpi *asihpi, int device)
 	err = snd_hwdep_new(asihpi->card, "HPI", device, &hw);
 	if (err < 0)
 		return err;
-	strscpy(hw->name, "asihpi (HPI)");
+	strcpy(hw->name, "asihpi (HPI)");
 	hw->iface = SNDRV_HWDEP_IFACE_LAST;
 	hw->ops.open = snd_asihpi_hpi_open;
 	hw->ops.ioctl = snd_asihpi_hpi_ioctl;
@@ -2889,7 +2889,7 @@ static int snd_asihpi_probe(struct pci_dev *pci_dev,
 	    by enable_hwdep  module param*/
 	snd_asihpi_hpi_new(asihpi, 0);
 
-	strscpy(card->driver, "ASIHPI");
+	strcpy(card->driver, "ASIHPI");
 
 	sprintf(card->shortname, "AudioScience ASI%4X",
 			asihpi->hpi->adapter->type);

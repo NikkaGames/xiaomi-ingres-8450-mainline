@@ -114,15 +114,7 @@ static void do_test(int fd, size_t size, enum test_type type, bool shared)
 	}
 
 	if (fallocate(fd, 0, 0, size)) {
-		/*
-		 * Some filesystems (eg, NFSv3) don't support
-		 * fallocate(), report this as a skip rather than a
-		 * test failure.
-		 */
-		if (errno == EOPNOTSUPP) {
-			ksft_print_msg("fallocate() not supported by filesystem\n");
-			result = KSFT_SKIP;
-		} else if (size == pagesize) {
+		if (size == pagesize) {
 			ksft_print_msg("fallocate() failed (%s)\n", strerror(errno));
 			result = KSFT_FAIL;
 		} else {

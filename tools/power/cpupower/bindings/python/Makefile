@@ -4,22 +4,20 @@
 # This Makefile expects you have already run `make install-lib` in the lib
 # directory for the bindings to be created.
 
-CC ?= gcc
-# CFLAGS ?=
-LDFLAGS ?= -lcpupower
+CC := gcc
 HAVE_SWIG := $(shell if which swig >/dev/null 2>&1; then echo 1; else echo 0; fi)
 HAVE_PYCONFIG := $(shell if which python-config >/dev/null 2>&1; then echo 1; else echo 0; fi)
 
-PY_INCLUDE ?= $(firstword $(shell python-config --includes))
-INSTALL_DIR ?= $(shell python3 -c "import site; print(site.getsitepackages()[0])")
+PY_INCLUDE = $(firstword $(shell python-config --includes))
+INSTALL_DIR = $(shell python3 -c "import site; print(site.getsitepackages()[0])")
 
 all: _raw_pylibcpupower.so
 
 _raw_pylibcpupower.so: raw_pylibcpupower_wrap.o
-	$(CC) -shared $(LDFLAGS) raw_pylibcpupower_wrap.o -o _raw_pylibcpupower.so
+	$(CC) -shared -lcpupower raw_pylibcpupower_wrap.o -o _raw_pylibcpupower.so
 
 raw_pylibcpupower_wrap.o: raw_pylibcpupower_wrap.c
-	$(CC) $(CFLAGS) $(PY_INCLUDE) -fPIC -c raw_pylibcpupower_wrap.c
+	$(CC) -fPIC -c raw_pylibcpupower_wrap.c $(PY_INCLUDE)
 
 raw_pylibcpupower_wrap.c: raw_pylibcpupower.swg
 ifeq ($(HAVE_SWIG),0)

@@ -26,6 +26,9 @@
 #include <linux/iio/triggered_buffer.h>
 #include <linux/iio/accel/kxcjk_1013.h>
 
+#define KXCJK1013_DRV_NAME "kxcjk1013"
+#define KXCJK1013_IRQ_NAME "kxcjk1013_event"
+
 #define KXTF9_REG_HP_XOUT_L		0x00
 #define KXTF9_REG_HP_XOUT_H		0x01
 #define KXTF9_REG_HP_YOUT_L		0x02
@@ -1461,7 +1464,7 @@ static int kxcjk1013_probe(struct i2c_client *client)
 						kxcjk1013_data_rdy_trig_poll,
 						kxcjk1013_event_handler,
 						IRQF_TRIGGER_RISING,
-						"kxcjk1013_event",
+						KXCJK1013_IRQ_NAME,
 						indio_dev);
 		if (ret)
 			goto err_poweroff;
@@ -1671,7 +1674,7 @@ MODULE_DEVICE_TABLE(acpi, kx_acpi_match);
 
 static struct i2c_driver kxcjk1013_driver = {
 	.driver = {
-		.name	= "kxcjk1013",
+		.name	= KXCJK1013_DRV_NAME,
 		.acpi_match_table = kx_acpi_match,
 		.of_match_table = kxcjk1013_of_match,
 		.pm	= pm_ptr(&kxcjk1013_pm_ops),

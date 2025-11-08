@@ -14,7 +14,6 @@
 #include "abi/guc_actions_abi.h"
 #include "xe_bo.h"
 #include "xe_gt.h"
-#include "xe_gt_printk.h"
 #include "xe_gt_stats.h"
 #include "xe_gt_tlb_invalidation.h"
 #include "xe_guc.h"
@@ -69,8 +68,31 @@ static bool access_is_atomic(enum access_type access_type)
 
 static bool vma_is_valid(struct xe_tile *tile, struct xe_vma *vma)
 {
-	return xe_vm_has_valid_gpu_mapping(tile, vma->tile_present,
-					   vma->tile_invalidated);
+	return BIT(tile->id) & vma->tile_present &&
+		!(BIT(tile->id) & vma->tile_invalidated);
+}
+
+static bool vma_matches(struct xe_vma *vma, u64 page_addr)
+{
+	if (page_addr > xe_vma_end(vma) - 1 ||
+	    page_addr + SZ_4K - 1 < xe_vma_start(vma))
+		return false;
+
+	return true;
+}
+
+static struct xe_vma *lookup_vma(struct xe_vm *vm, u64 page_addr)
+{
+	struct xe_vma *vma = NULL;
+
+	if (vm->usm.last_fault_vma) {   /* Fast lookup */
+		if (vma_matches(vm->usm.last_fault_vma, page_addr))
+			vma = vm->usm.last_fault_vma;
+	}
+	if (!vma)
+		vma = xe_vm_find_overlapping_vma(vm, page_addr, SZ_4K);
+
+	return vma;
 }
 
 static int xe_pf_begin(struct drm_exec *exec, struct xe_vma *vma,
@@ -121,7 +143,7 @@ static int handle_vma_pagefault(struct xe_gt *gt, struct xe_vma *vma,
 
 	trace_xe_vma_pagefault(vma);
 
-	/* Check if VMA is valid, opportunistic check only */
+	/* Check if VMA is valid */
 	if (vma_is_valid(tile, vma) && !atomic)
 		return 0;
 
@@ -158,6 +180,7 @@ retry_userptr:
 
 	dma_fence_wait(fence, false);
 	dma_fence_put(fence);
+	vma->tile_invalidated &= ~BIT(tile->id);
 
 unlock_dma_resv:
 	drm_exec_fini(&exec);
@@ -208,7 +231,7 @@ static int handle_pagefault(struct xe_gt *gt, struct pagefault *pf)
 		goto unlock_vm;
 	}
 
-	vma = xe_vm_find_vma_by_addr(vm, pf->page_addr);
+	vma = lookup_vma(vm, pf->page_addr);
 	if (!vma) {
 		err = -EINVAL;
 		goto unlock_vm;
@@ -243,22 +266,22 @@ static int send_pagefault_reply(struct xe_guc *guc,
 	return xe_guc_ct_send(&guc->ct, action, ARRAY_SIZE(action), 0, 0);
 }
 
-static void print_pagefault(struct xe_gt *gt, struct pagefault *pf)
+static void print_pagefault(struct xe_device *xe, struct pagefault *pf)
 {
-	xe_gt_dbg(gt, "\n\tASID: %d\n"
-		  "\tVFID: %d\n"
-		  "\tPDATA: 0x%04x\n"
-		  "\tFaulted Address: 0x%08x%08x\n"
-		  "\tFaultType: %d\n"
-		  "\tAccessType: %d\n"
-		  "\tFaultLevel: %d\n"
-		  "\tEngineClass: %d %s\n"
-		  "\tEngineInstance: %d\n",
-		  pf->asid, pf->vfid, pf->pdata, upper_32_bits(pf->page_addr),
-		  lower_32_bits(pf->page_addr),
-		  pf->fault_type, pf->access_type, pf->fault_level,
-		  pf->engine_class, xe_hw_engine_class_to_str(pf->engine_class),
-		  pf->engine_instance);
+	drm_dbg(&xe->drm, "\n\tASID: %d\n"
+		 "\tVFID: %d\n"
+		 "\tPDATA: 0x%04x\n"
+		 "\tFaulted Address: 0x%08x%08x\n"
+		 "\tFaultType: %d\n"
+		 "\tAccessType: %d\n"
+		 "\tFaultLevel: %d\n"
+		 "\tEngineClass: %d %s\n"
+		 "\tEngineInstance: %d\n",
+		 pf->asid, pf->vfid, pf->pdata, upper_32_bits(pf->page_addr),
+		 lower_32_bits(pf->page_addr),
+		 pf->fault_type, pf->access_type, pf->fault_level,
+		 pf->engine_class, xe_hw_engine_class_to_str(pf->engine_class),
+		 pf->engine_instance);
 }
 
 #define PF_MSG_LEN_DW	4
@@ -310,6 +333,7 @@ static bool pf_queue_full(struct pf_queue *pf_queue)
 int xe_guc_pagefault_handler(struct xe_guc *guc, u32 *msg, u32 len)
 {
 	struct xe_gt *gt = guc_to_gt(guc);
+	struct xe_device *xe = gt_to_xe(gt);
 	struct pf_queue *pf_queue;
 	unsigned long flags;
 	u32 asid;
@@ -334,7 +358,7 @@ int xe_guc_pagefault_handler(struct xe_guc *guc, u32 *msg, u32 len)
 			pf_queue->num_dw;
 		queue_work(gt->usm.pf_wq, &pf_queue->worker);
 	} else {
-		xe_gt_warn(gt, "PageFault Queue full, shouldn't be possible\n");
+		drm_warn(&xe->drm, "PF Queue full, shouldn't be possible");
 	}
 	spin_unlock_irqrestore(&pf_queue->lock, flags);
 
@@ -347,6 +371,7 @@ static void pf_queue_work_func(struct work_struct *w)
 {
 	struct pf_queue *pf_queue = container_of(w, struct pf_queue, worker);
 	struct xe_gt *gt = pf_queue->gt;
+	struct xe_device *xe = gt_to_xe(gt);
 	struct xe_guc_pagefault_reply reply = {};
 	struct pagefault pf = {};
 	unsigned long threshold;
@@ -357,9 +382,9 @@ static void pf_queue_work_func(struct work_struct *w)
 	while (get_pagefault(pf_queue, &pf)) {
 		ret = handle_pagefault(gt, &pf);
 		if (unlikely(ret)) {
-			print_pagefault(gt, &pf);
+			print_pagefault(xe, &pf);
 			pf.fault_unsuccessful = 1;
-			xe_gt_dbg(gt, "Fault response: Unsuccessful %pe\n", ERR_PTR(ret));
+			drm_dbg(&xe->drm, "Fault response: Unsuccessful %d\n", ret);
 		}
 
 		reply.dw0 = FIELD_PREP(PFR_VALID, 1) |
@@ -513,21 +538,21 @@ static int sub_granularity_in_byte(int val)
 	return (granularity_in_byte(val) / 32);
 }
 
-static void print_acc(struct xe_gt *gt, struct acc *acc)
+static void print_acc(struct xe_device *xe, struct acc *acc)
 {
-	xe_gt_warn(gt, "Access counter request:\n"
-		   "\tType: %s\n"
-		   "\tASID: %d\n"
-		   "\tVFID: %d\n"
-		   "\tEngine: %d:%d\n"
-		   "\tGranularity: 0x%x KB Region/ %d KB sub-granularity\n"
-		   "\tSub_Granularity Vector: 0x%08x\n"
-		   "\tVA Range base: 0x%016llx\n",
-		   acc->access_type ? "AC_NTFY_VAL" : "AC_TRIG_VAL",
-		   acc->asid, acc->vfid, acc->engine_class, acc->engine_instance,
-		   granularity_in_byte(acc->granularity) / SZ_1K,
-		   sub_granularity_in_byte(acc->granularity) / SZ_1K,
-		   acc->sub_granularity, acc->va_range_base);
+	drm_warn(&xe->drm, "Access counter request:\n"
+		 "\tType: %s\n"
+		 "\tASID: %d\n"
+		 "\tVFID: %d\n"
+		 "\tEngine: %d:%d\n"
+		 "\tGranularity: 0x%x KB Region/ %d KB sub-granularity\n"
+		 "\tSub_Granularity Vector: 0x%08x\n"
+		 "\tVA Range base: 0x%016llx\n",
+		 acc->access_type ? "AC_NTFY_VAL" : "AC_TRIG_VAL",
+		 acc->asid, acc->vfid, acc->engine_class, acc->engine_instance,
+		 granularity_in_byte(acc->granularity) / SZ_1K,
+		 sub_granularity_in_byte(acc->granularity) / SZ_1K,
+		 acc->sub_granularity, acc->va_range_base);
 }
 
 static struct xe_vma *get_acc_vma(struct xe_vm *vm, struct acc *acc)
@@ -625,6 +650,7 @@ static void acc_queue_work_func(struct work_struct *w)
 {
 	struct acc_queue *acc_queue = container_of(w, struct acc_queue, worker);
 	struct xe_gt *gt = acc_queue->gt;
+	struct xe_device *xe = gt_to_xe(gt);
 	struct acc acc = {};
 	unsigned long threshold;
 	int ret;
@@ -634,8 +660,8 @@ static void acc_queue_work_func(struct work_struct *w)
 	while (get_acc(acc_queue, &acc)) {
 		ret = handle_acc(gt, &acc);
 		if (unlikely(ret)) {
-			print_acc(gt, &acc);
-			xe_gt_warn(gt, "ACC: Unsuccessful %pe\n", ERR_PTR(ret));
+			print_acc(xe, &acc);
+			drm_warn(&xe->drm, "ACC: Unsuccessful %d\n", ret);
 		}
 
 		if (time_after(jiffies, threshold) &&
@@ -680,7 +706,7 @@ int xe_guc_access_counter_notify_handler(struct xe_guc *guc, u32 *msg, u32 len)
 		acc_queue->head = (acc_queue->head + len) % ACC_QUEUE_NUM_DW;
 		queue_work(gt->usm.acc_wq, &acc_queue->worker);
 	} else {
-		xe_gt_warn(gt, "ACC Queue full, dropping ACC\n");
+		drm_warn(&gt_to_xe(gt)->drm, "ACC Queue full, dropping ACC");
 	}
 	spin_unlock(&acc_queue->lock);
 

@@ -188,7 +188,6 @@ impl<T> StackInit<T> {
 }
 
 #[test]
-#[cfg(feature = "std")]
 fn stack_init_reuse() {
     use ::std::{borrow::ToOwned, println, string::String};
     use core::pin::pin;

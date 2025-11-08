@@ -9,7 +9,6 @@
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/err.h>
-#include <linux/export.h>
 #include <linux/hdmi.h>
 #include <linux/i2c.h>
 #include <linux/irq.h>
@@ -2978,8 +2977,7 @@ static void dw_hdmi_bridge_atomic_enable(struct drm_bridge *bridge,
 	mutex_unlock(&hdmi->mutex);
 }
 
-static enum drm_connector_status
-dw_hdmi_bridge_detect(struct drm_bridge *bridge, struct drm_connector *connector)
+static enum drm_connector_status dw_hdmi_bridge_detect(struct drm_bridge *bridge)
 {
 	struct dw_hdmi *hdmi = bridge->driver_private;
 

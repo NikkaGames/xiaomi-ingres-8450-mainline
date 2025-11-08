@@ -952,6 +952,7 @@ static int imx415_s_stream(struct v4l2_subdev *sd, int enable)
 	if (!enable) {
 		ret = imx415_stream_off(sensor);
 
+		pm_runtime_mark_last_busy(sensor->dev);
 		pm_runtime_put_autosuspend(sensor->dev);
 
 		goto unlock;
@@ -1250,7 +1251,7 @@ static int imx415_parse_hw_config(struct imx415 *sensor)
 		return dev_err_probe(sensor->dev, PTR_ERR(sensor->reset),
 				     "failed to get reset GPIO\n");
 
-	sensor->clk = devm_clk_get(sensor->dev, NULL);
+	sensor->clk = devm_clk_get(sensor->dev, "inck");
 	if (IS_ERR(sensor->clk))
 		return dev_err_probe(sensor->dev, PTR_ERR(sensor->clk),
 				     "failed to get clock\n");

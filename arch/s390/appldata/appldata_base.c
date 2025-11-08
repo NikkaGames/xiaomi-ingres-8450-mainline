@@ -12,7 +12,6 @@
 #define KMSG_COMPONENT	"appldata"
 #define pr_fmt(fmt) KMSG_COMPONENT ": " fmt
 
-#include <linux/export.h>
 #include <linux/module.h>
 #include <linux/sched/stat.h>
 #include <linux/init.h>

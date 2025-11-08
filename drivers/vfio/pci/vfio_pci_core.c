@@ -20,6 +20,7 @@
 #include <linux/mutex.h>
 #include <linux/notifier.h>
 #include <linux/pci.h>
+#include <linux/pfn_t.h>
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <linux/types.h>
@@ -1668,12 +1669,14 @@ static vm_fault_t vfio_pci_mmap_huge_fault(struct vm_fault *vmf,
 		break;
 #ifdef CONFIG_ARCH_SUPPORTS_PMD_PFNMAP
 	case PMD_ORDER:
-		ret = vmf_insert_pfn_pmd(vmf, pfn, false);
+		ret = vmf_insert_pfn_pmd(vmf,
+					 __pfn_to_pfn_t(pfn, PFN_DEV), false);
 		break;
 #endif
 #ifdef CONFIG_ARCH_SUPPORTS_PUD_PFNMAP
 	case PUD_ORDER:
-		ret = vmf_insert_pfn_pud(vmf, pfn, false);
+		ret = vmf_insert_pfn_pud(vmf,
+					 __pfn_to_pfn_t(pfn, PFN_DEV), false);
 		break;
 #endif
 	default:
@@ -1818,13 +1821,9 @@ void vfio_pci_core_request(struct vfio_device *core_vdev, unsigned int count)
 }
 EXPORT_SYMBOL_GPL(vfio_pci_core_request);
 
-int vfio_pci_core_match_token_uuid(struct vfio_device *core_vdev,
-				   const uuid_t *uuid)
-
+static int vfio_pci_validate_vf_token(struct vfio_pci_core_device *vdev,
+				      bool vf_token, uuid_t *uuid)
 {
-	struct vfio_pci_core_device *vdev =
-		container_of(core_vdev, struct vfio_pci_core_device, vdev);
-
 	/*
 	 * There's always some degree of trust or collaboration between SR-IOV
 	 * PF and VFs, even if just that the PF hosts the SR-IOV capability and
@@ -1855,7 +1854,7 @@ int vfio_pci_core_match_token_uuid(struct vfio_device *core_vdev,
 		bool match;
 
 		if (!pf_vdev) {
-			if (!uuid)
+			if (!vf_token)
 				return 0; /* PF is not vfio-pci, no VF token */
 
 			pci_info_ratelimited(vdev->pdev,
@@ -1863,7 +1862,7 @@ int vfio_pci_core_match_token_uuid(struct vfio_device *core_vdev,
 			return -EINVAL;
 		}
 
-		if (!uuid) {
+		if (!vf_token) {
 			pci_info_ratelimited(vdev->pdev,
 				"VF token required to access device\n");
 			return -EACCES;
@@ -1881,7 +1880,7 @@ int vfio_pci_core_match_token_uuid(struct vfio_device *core_vdev,
 	} else if (vdev->vf_token) {
 		mutex_lock(&vdev->vf_token->lock);
 		if (vdev->vf_token->users) {
-			if (!uuid) {
+			if (!vf_token) {
 				mutex_unlock(&vdev->vf_token->lock);
 				pci_info_ratelimited(vdev->pdev,
 					"VF token required to access device\n");
@@ -1894,12 +1893,12 @@ int vfio_pci_core_match_token_uuid(struct vfio_device *core_vdev,
 					"Incorrect VF token provided for device\n");
 				return -EACCES;
 			}
-		} else if (uuid) {
+		} else if (vf_token) {
 			uuid_copy(&vdev->vf_token->uuid, uuid);
 		}
 
 		mutex_unlock(&vdev->vf_token->lock);
-	} else if (uuid) {
+	} else if (vf_token) {
 		pci_info_ratelimited(vdev->pdev,
 			"VF token incorrectly provided, not a PF or VF\n");
 		return -EINVAL;
@@ -1907,7 +1906,6 @@ int vfio_pci_core_match_token_uuid(struct vfio_device *core_vdev,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(vfio_pci_core_match_token_uuid);
 
 #define VF_TOKEN_ARG "vf_token="
 
@@ -1954,8 +1952,7 @@ int vfio_pci_core_match(struct vfio_device *core_vdev, char *buf)
 		}
 	}
 
-	ret = core_vdev->ops->match_token_uuid(core_vdev,
-					       vf_token ? &uuid : NULL);
+	ret = vfio_pci_validate_vf_token(vdev, vf_token, &uuid);
 	if (ret)
 		return ret;
 
@@ -2152,7 +2149,7 @@ int vfio_pci_core_register_device(struct vfio_pci_core_device *vdev)
 		return -EBUSY;
 	}
 
-	if (pci_is_root_bus(pdev->bus) || pdev->is_virtfn) {
+	if (pci_is_root_bus(pdev->bus)) {
 		ret = vfio_assign_device_set(&vdev->vdev, vdev);
 	} else if (!pci_probe_reset_slot(pdev->slot)) {
 		ret = vfio_assign_device_set(&vdev->vdev, pdev->slot);

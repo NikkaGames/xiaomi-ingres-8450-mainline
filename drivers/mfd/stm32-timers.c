@@ -5,7 +5,6 @@
  */
 
 #include <linux/bitfield.h>
-#include <linux/export.h>
 #include <linux/mfd/stm32-timers.h>
 #include <linux/module.h>
 #include <linux/of_platform.h>

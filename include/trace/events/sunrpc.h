@@ -1691,6 +1691,7 @@ SVC_RQST_FLAG_LIST
 		__print_flags(flags, "|", SVC_RQST_FLAG_LIST)
 
 TRACE_DEFINE_ENUM(SVC_GARBAGE);
+TRACE_DEFINE_ENUM(SVC_SYSERR);
 TRACE_DEFINE_ENUM(SVC_VALID);
 TRACE_DEFINE_ENUM(SVC_NEGATIVE);
 TRACE_DEFINE_ENUM(SVC_OK);
@@ -1703,6 +1704,7 @@ TRACE_DEFINE_ENUM(SVC_COMPLETE);
 #define show_svc_auth_status(status)			\
 	__print_symbolic(status,			\
 		{ SVC_GARBAGE,	"SVC_GARBAGE" },	\
+		{ SVC_SYSERR,	"SVC_SYSERR" },		\
 		{ SVC_VALID,	"SVC_VALID" },		\
 		{ SVC_NEGATIVE,	"SVC_NEGATIVE" },	\
 		{ SVC_OK,	"SVC_OK" },		\
@@ -2121,34 +2123,21 @@ TRACE_EVENT(svc_xprt_accept,
 	)
 );
 
-DECLARE_EVENT_CLASS(svc_pool_thread_event,
-	TP_PROTO(const struct svc_pool *pool, pid_t pid),
+TRACE_EVENT(svc_wake_up,
+	TP_PROTO(int pid),
 
-	TP_ARGS(pool, pid),
+	TP_ARGS(pid),
 
 	TP_STRUCT__entry(
-		__field(unsigned int, pool_id)
-		__field(pid_t, pid)
+		__field(int, pid)
 	),
 
 	TP_fast_assign(
-		__entry->pool_id = pool->sp_id;
 		__entry->pid = pid;
 	),
 
-	TP_printk("pool=%u pid=%d", __entry->pool_id, __entry->pid)
+	TP_printk("pid=%d", __entry->pid)
 );
-
-#define DEFINE_SVC_POOL_THREAD_EVENT(name) \
-	DEFINE_EVENT(svc_pool_thread_event, svc_pool_thread_##name, \
-			TP_PROTO( \
-				const struct svc_pool *pool, pid_t pid \
-			), \
-			TP_ARGS(pool, pid))
-
-DEFINE_SVC_POOL_THREAD_EVENT(wake);
-DEFINE_SVC_POOL_THREAD_EVENT(running);
-DEFINE_SVC_POOL_THREAD_EVENT(noidle);
 
 TRACE_EVENT(svc_alloc_arg_err,
 	TP_PROTO(

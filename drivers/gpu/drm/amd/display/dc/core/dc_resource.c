@@ -3940,9 +3940,7 @@ enum dc_status resource_map_pool_resources(
 	/* TODO: Add check if ASIC support and EDID audio */
 	if (!stream->converter_disable_audio &&
 	    dc_is_audio_capable_signal(pipe_ctx->stream->signal) &&
-	    stream->audio_info.mode_count &&
-		(stream->audio_info.flags.all ||
-		(stream->sink && stream->sink->edid_caps.panel_patch.skip_audio_sab_check))) {
+	    stream->audio_info.mode_count && stream->audio_info.flags.all) {
 		pipe_ctx->stream_res.audio = find_first_free_audio(
 		&context->res_ctx, pool, pipe_ctx->stream_res.stream_enc->id, dc_ctx->dce_version);
 
@@ -4055,7 +4053,7 @@ static bool add_all_planes_for_stream(
  * @set: An array of dc_validation_set with all the current streams reference
  * @set_count: Total of streams
  * @context: New context
- * @validate_mode: identify the validation mode
+ * @fast_validate: Enable or disable fast validation
  *
  * This function updates the potential new stream in the context object. It
  * creates multiple lists for the add, remove, and unchanged streams. In
@@ -4070,7 +4068,7 @@ enum dc_status dc_validate_with_context(struct dc *dc,
 					const struct dc_validation_set set[],
 					int set_count,
 					struct dc_state *context,
-					enum dc_validate_mode validate_mode)
+					bool fast_validate)
 {
 	struct dc_stream_state *unchanged_streams[MAX_PIPES] = { 0 };
 	struct dc_stream_state *del_streams[MAX_PIPES] = { 0 };
@@ -4244,7 +4242,7 @@ enum dc_status dc_validate_with_context(struct dc *dc,
 		dc_state_set_stream_subvp_cursor_limit(context->streams[i], context, false);
 	}
 
-	res = dc_validate_global_state(dc, context, validate_mode);
+	res = dc_validate_global_state(dc, context, fast_validate);
 
 	/* calculate pixel rate divider after deciding pxiel clock & odm combine  */
 	if ((dc->hwss.calculate_pix_rate_divider) && (res == DC_OK)) {
@@ -4301,7 +4299,7 @@ static void decide_hblank_borrow(struct pipe_ctx *pipe_ctx)
  *
  * @dc: dc struct for this driver
  * @new_ctx: state to be validated
- * @validate_mode: identify the validation mode
+ * @fast_validate: set to true if only yes/no to support matters
  *
  * Checks hardware resource availability and bandwidth requirement.
  *
@@ -4311,7 +4309,7 @@ static void decide_hblank_borrow(struct pipe_ctx *pipe_ctx)
 enum dc_status dc_validate_global_state(
 		struct dc *dc,
 		struct dc_state *new_ctx,
-		enum dc_validate_mode validate_mode)
+		bool fast_validate)
 {
 	enum dc_status result = DC_ERROR_UNEXPECTED;
 	int i, j;
@@ -4370,7 +4368,7 @@ enum dc_status dc_validate_global_state(
 	result = resource_build_scaling_params_for_context(dc, new_ctx);
 
 	if (result == DC_OK)
-		result = dc->res_pool->funcs->validate_bandwidth(dc, new_ctx, validate_mode);
+		result = dc->res_pool->funcs->validate_bandwidth(dc, new_ctx, fast_validate);
 
 	return result;
 }

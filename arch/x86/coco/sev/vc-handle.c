@@ -17,7 +17,6 @@
 #include <linux/mm.h>
 #include <linux/io.h>
 #include <linux/psp-sev.h>
-#include <linux/efi.h>
 #include <uapi/linux/sev-guest.h>
 
 #include <asm/init.h>
@@ -179,15 +178,9 @@ static enum es_result __vc_decode_kern_insn(struct es_em_ctxt *ctxt)
 		return ES_OK;
 }
 
-/*
- * User instruction decoding is also required for the EFI runtime. Even though
- * the EFI runtime is running in kernel mode, it uses special EFI virtual
- * address mappings that require the use of efi_mm to properly address and
- * decode.
- */
 static enum es_result vc_decode_insn(struct es_em_ctxt *ctxt)
 {
-	if (user_mode(ctxt->regs) || mm_is_efi(current->active_mm))
+	if (user_mode(ctxt->regs))
 		return __vc_decode_user_insn(ctxt);
 	else
 		return __vc_decode_kern_insn(ctxt);
@@ -371,30 +364,29 @@ static enum es_result __vc_handle_msr_caa(struct pt_regs *regs, bool write)
  * executing with Secure TSC enabled, so special handling is required for
  * accesses of MSR_IA32_TSC and MSR_AMD64_GUEST_TSC_FREQ.
  */
-static enum es_result __vc_handle_secure_tsc_msrs(struct es_em_ctxt *ctxt, bool write)
+static enum es_result __vc_handle_secure_tsc_msrs(struct pt_regs *regs, bool write)
 {
-	struct pt_regs *regs = ctxt->regs;
 	u64 tsc;
 
 	/*
-	 * Writing to MSR_IA32_TSC can cause subsequent reads of the TSC to
-	 * return undefined values, and GUEST_TSC_FREQ is read-only. Generate
-	 * a #GP on all writes.
-	 */
-	if (write) {
-		ctxt->fi.vector = X86_TRAP_GP;
-		ctxt->fi.error_code = 0;
-		return ES_EXCEPTION;
-	}
-
-	/*
-	 * GUEST_TSC_FREQ read should not be intercepted when Secure TSC is
-	 * enabled. Terminate the guest if a read is attempted.
+	 * GUEST_TSC_FREQ should not be intercepted when Secure TSC is enabled.
+	 * Terminate the SNP guest when the interception is enabled.
 	 */
 	if (regs->cx == MSR_AMD64_GUEST_TSC_FREQ)
 		return ES_VMM_ERROR;
 
-	/* Reads of MSR_IA32_TSC should return the current TSC value. */
+	/*
+	 * Writes: Writing to MSR_IA32_TSC can cause subsequent reads of the TSC
+	 *         to return undefined values, so ignore all writes.
+	 *
+	 * Reads: Reads of MSR_IA32_TSC should return the current TSC value, use
+	 *        the value returned by rdtsc_ordered().
+	 */
+	if (write) {
+		WARN_ONCE(1, "TSC MSR writes are verboten!\n");
+		return ES_OK;
+	}
+
 	tsc = rdtsc_ordered();
 	regs->ax = lower_32_bits(tsc);
 	regs->dx = upper_32_bits(tsc);
@@ -417,7 +409,7 @@ static enum es_result vc_handle_msr(struct ghcb *ghcb, struct es_em_ctxt *ctxt)
 	case MSR_IA32_TSC:
 	case MSR_AMD64_GUEST_TSC_FREQ:
 		if (sev_status & MSR_AMD64_SNP_SECURE_TSC)
-			return __vc_handle_secure_tsc_msrs(ctxt, write);
+			return __vc_handle_secure_tsc_msrs(regs, write);
 		break;
 	default:
 		break;

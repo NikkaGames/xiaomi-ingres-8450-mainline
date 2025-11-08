@@ -3016,7 +3016,7 @@ relock:
 			 * first and our do_group_exit call below will use
 			 * that value and ignore the one we pass it.
 			 */
-			vfs_coredump(&ksig->info);
+			do_coredump(&ksig->info);
 		}
 
 		/*
@@ -4067,7 +4067,6 @@ SYSCALL_DEFINE4(pidfd_send_signal, int, pidfd, int, sig,
 {
 	struct pid *pid;
 	enum pid_type type;
-	int ret;
 
 	/* Enforce flags be set to 0 until we add an extension. */
 	if (flags & ~PIDFD_SEND_SIGNAL_FLAGS)
@@ -4109,10 +4108,7 @@ SYSCALL_DEFINE4(pidfd_send_signal, int, pidfd, int, sig,
 	}
 	}
 
-	ret = do_pidfd_send_signal(pid, sig, type, info, flags);
-	put_pid(pid);
-
-	return ret;
+	return do_pidfd_send_signal(pid, sig, type, info, flags);
 }
 
 static int

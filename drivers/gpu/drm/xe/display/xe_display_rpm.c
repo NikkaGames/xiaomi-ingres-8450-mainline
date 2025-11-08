@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: MIT
 /* Copyright © 2025 Intel Corporation */
 
-#include "intel_display_core.h"
 #include "intel_display_rpm.h"
-#include "xe_device.h"
 #include "xe_device_types.h"
 #include "xe_pm.h"
 
 static struct xe_device *display_to_xe(struct intel_display *display)
 {
-	return to_xe_device(display->drm);
+	return container_of(display, struct xe_device, display);
 }
 
 struct ref_tracker *intel_display_rpm_get_raw(struct intel_display *display)

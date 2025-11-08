@@ -13,7 +13,6 @@
 #include <linux/uaccess.h>
 #include <linux/pagemap.h>
 #include <linux/io_uring/cmd.h>
-#include <linux/blk-integrity.h>
 #include <uapi/linux/blkdev.h>
 #include "blk.h"
 #include "blk-crypto-internal.h"
@@ -645,7 +644,7 @@ static int blkdev_common_ioctl(struct block_device *bdev, blk_mode_t mode,
 	case IOC_PR_CLEAR:
 		return blkdev_pr_clear(bdev, mode, argp);
 	default:
-		return blk_get_meta_cap(bdev, cmd, argp);
+		return -ENOIOCTLCMD;
 	}
 }
 

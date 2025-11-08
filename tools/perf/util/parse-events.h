@@ -11,7 +11,6 @@
 #include <linux/perf_event.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/types.h>
 
 struct evsel;
 struct evlist;
@@ -21,7 +20,7 @@ struct option;
 struct perf_pmu;
 struct strbuf;
 
-const char *event_type(size_t type);
+const char *event_type(int type);
 
 /* Arguments encoded in opt->value. */
 struct parse_events_option_args {
@@ -46,7 +45,6 @@ static inline int parse_events(struct evlist *evlist, const char *str,
 int parse_event(struct evlist *evlist, const char *str);
 
 int parse_filter(const struct option *opt, const char *str, int unset);
-int parse_uid_filter(struct evlist *evlist, uid_t uid);
 int exclude_perf(const struct option *opt, const char *arg, int unset);
 
 enum parse_events__term_val_type {
@@ -264,6 +262,7 @@ struct event_symbol {
 	const char	*alias;
 };
 extern const struct event_symbol event_symbols_hw[];
+extern const struct event_symbol event_symbols_sw[];
 
 char *parse_events_formats_error_string(char *additional_terms);
 

@@ -21,7 +21,8 @@ struct rv_monitor rv_sched = {
 
 static int __init register_sched(void)
 {
-	return rv_register_monitor(&rv_sched, NULL);
+	rv_register_monitor(&rv_sched, NULL);
+	return 0;
 }
 
 static void __exit unregister_sched(void)

@@ -927,7 +927,10 @@ brcmf_usb_dl_writeimage(struct brcmf_usbdev_info *devinfo, u8 *fw, int fwlen)
 		/* Wait until the usb device reports it received all
 		 * the bytes we sent */
 		if ((rdlbytes == sent) && (rdlbytes != dllen)) {
-			sendlen = min(dllen - sent, TRX_RDL_CHUNK);
+			if ((dllen-sent) < TRX_RDL_CHUNK)
+				sendlen = dllen-sent;
+			else
+				sendlen = TRX_RDL_CHUNK;
 
 			/* simply avoid having to send a ZLP by ensuring we
 			 * never have an even

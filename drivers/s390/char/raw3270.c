@@ -8,7 +8,6 @@
  *     Copyright IBM Corp. 2003, 2009
  */
 
-#include <linux/export.h>
 #include <linux/module.h>
 #include <linux/err.h>
 #include <linux/init.h>

@@ -318,7 +318,7 @@ static int kernfs_fill_super(struct super_block *sb, struct kernfs_fs_context *k
 		return -ENOMEM;
 	}
 	sb->s_root = root;
-	set_default_d_op(sb, &kernfs_dops);
+	sb->s_d_op = &kernfs_dops;
 	return 0;
 }
 

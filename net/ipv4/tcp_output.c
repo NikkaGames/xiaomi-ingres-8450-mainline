@@ -1066,15 +1066,15 @@ static unsigned int tcp_established_options(struct sock *sk, struct sk_buff *skb
  * needs to be reallocated in a driver.
  * The invariant being skb->truesize subtracted from sk->sk_wmem_alloc
  *
- * Since transmit from skb destructor is forbidden, we use a BH work item
+ * Since transmit from skb destructor is forbidden, we use a tasklet
  * to process all sockets that eventually need to send more skbs.
- * We use one work item per cpu, with its own queue of sockets.
+ * We use one tasklet per cpu, with its own queue of sockets.
  */
-struct tsq_work {
-	struct work_struct	work;
+struct tsq_tasklet {
+	struct tasklet_struct	tasklet;
 	struct list_head	head; /* queue of tcp sockets */
 };
-static DEFINE_PER_CPU(struct tsq_work, tsq_work);
+static DEFINE_PER_CPU(struct tsq_tasklet, tsq_tasklet);
 
 static void tcp_tsq_write(struct sock *sk)
 {
@@ -1104,14 +1104,14 @@ static void tcp_tsq_handler(struct sock *sk)
 	bh_unlock_sock(sk);
 }
 /*
- * One work item per cpu tries to send more skbs.
- * We run in BH context but need to disable irqs when
+ * One tasklet per cpu tries to send more skbs.
+ * We run in tasklet context but need to disable irqs when
  * transferring tsq->head because tcp_wfree() might
  * interrupt us (non NAPI drivers)
  */
-static void tcp_tsq_workfn(struct work_struct *work)
+static void tcp_tasklet_func(struct tasklet_struct *t)
 {
-	struct tsq_work *tsq = container_of(work, struct tsq_work, work);
+	struct tsq_tasklet *tsq = from_tasklet(tsq,  t, tasklet);
 	LIST_HEAD(list);
 	unsigned long flags;
 	struct list_head *q, *n;
@@ -1181,15 +1181,15 @@ void tcp_release_cb(struct sock *sk)
 }
 EXPORT_IPV6_MOD(tcp_release_cb);
 
-void __init tcp_tsq_work_init(void)
+void __init tcp_tasklet_init(void)
 {
 	int i;
 
 	for_each_possible_cpu(i) {
-		struct tsq_work *tsq = &per_cpu(tsq_work, i);
+		struct tsq_tasklet *tsq = &per_cpu(tsq_tasklet, i);
 
 		INIT_LIST_HEAD(&tsq->head);
-		INIT_WORK(&tsq->work, tcp_tsq_workfn);
+		tasklet_setup(&tsq->tasklet, tcp_tasklet_func);
 	}
 }
 
@@ -1203,11 +1203,11 @@ void tcp_wfree(struct sk_buff *skb)
 	struct sock *sk = skb->sk;
 	struct tcp_sock *tp = tcp_sk(sk);
 	unsigned long flags, nval, oval;
-	struct tsq_work *tsq;
+	struct tsq_tasklet *tsq;
 	bool empty;
 
 	/* Keep one reference on sk_wmem_alloc.
-	 * Will be released by sk_free() from here or tcp_tsq_workfn()
+	 * Will be released by sk_free() from here or tcp_tasklet_func()
 	 */
 	WARN_ON(refcount_sub_and_test(skb->truesize - 1, &sk->sk_wmem_alloc));
 
@@ -1229,13 +1229,13 @@ void tcp_wfree(struct sk_buff *skb)
 		nval = (oval & ~TSQF_THROTTLED) | TSQF_QUEUED;
 	} while (!try_cmpxchg(&sk->sk_tsq_flags, &oval, nval));
 
-	/* queue this socket to BH workqueue */
+	/* queue this socket to tasklet queue */
 	local_irq_save(flags);
-	tsq = this_cpu_ptr(&tsq_work);
+	tsq = this_cpu_ptr(&tsq_tasklet);
 	empty = list_empty(&tsq->head);
 	list_add(&tp->tsq_node, &tsq->head);
 	if (empty)
-		queue_work(system_bh_wq, &tsq->work);
+		tasklet_schedule(&tsq->tasklet);
 	local_irq_restore(flags);
 	return;
 out:
@@ -1553,6 +1553,11 @@ static void tcp_adjust_pcount(struct sock *sk, const struct sk_buff *skb, int de
 	/* Reno case is special. Sigh... */
 	if (tcp_is_reno(tp) && decr > 0)
 		tp->sacked_out -= min_t(u32, tp->sacked_out, decr);
+
+	if (tp->lost_skb_hint &&
+	    before(TCP_SKB_CB(skb)->seq, TCP_SKB_CB(tp->lost_skb_hint)->seq) &&
+	    (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED))
+		tp->lost_cnt_hint -= decr;
 
 	tcp_verify_left_out(tp);
 }
@@ -2634,7 +2639,7 @@ static bool tcp_small_queue_check(struct sock *sk, const struct sk_buff *skb,
 	if (refcount_read(&sk->sk_wmem_alloc) > limit) {
 		/* Always send skb if rtx queue is empty or has one skb.
 		 * No need to wait for TX completion to call us back,
-		 * after softirq schedule.
+		 * after softirq/tasklet schedule.
 		 * This helps when TX completions are delayed too much.
 		 */
 		if (tcp_rtx_queue_empty_or_single_skb(sk))
@@ -3247,6 +3252,7 @@ static bool tcp_collapse_retrans(struct sock *sk, struct sk_buff *skb)
 	TCP_SKB_CB(skb)->eor = TCP_SKB_CB(next_skb)->eor;
 
 	/* changed transmit queue under us so clear hints */
+	tcp_clear_retrans_hints_partial(tp);
 	if (next_skb == tp->retransmit_skb_hint)
 		tp->retransmit_skb_hint = skb;
 
@@ -3330,10 +3336,8 @@ int __tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb, int segs)
 	if (icsk->icsk_mtup.probe_size)
 		icsk->icsk_mtup.probe_size = 0;
 
-	if (skb_still_in_host_queue(sk, skb)) {
-		err = -EBUSY;
-		goto out;
-	}
+	if (skb_still_in_host_queue(sk, skb))
+		return -EBUSY;
 
 start:
 	if (before(TCP_SKB_CB(skb)->seq, tp->snd_una)) {
@@ -3344,19 +3348,14 @@ start:
 		}
 		if (unlikely(before(TCP_SKB_CB(skb)->end_seq, tp->snd_una))) {
 			WARN_ON_ONCE(1);
-			err = -EINVAL;
-			goto out;
+			return -EINVAL;
 		}
-		if (tcp_trim_head(sk, skb, tp->snd_una - TCP_SKB_CB(skb)->seq)) {
-			err = -ENOMEM;
-			goto out;
-		}
+		if (tcp_trim_head(sk, skb, tp->snd_una - TCP_SKB_CB(skb)->seq))
+			return -ENOMEM;
 	}
 
-	if (inet_csk(sk)->icsk_af_ops->rebuild_header(sk)) {
-		err = -EHOSTUNREACH; /* Routing failure or similar. */
-		goto out;
-	}
+	if (inet_csk(sk)->icsk_af_ops->rebuild_header(sk))
+		return -EHOSTUNREACH; /* Routing failure or similar. */
 
 	cur_mss = tcp_current_mss(sk);
 	avail_wnd = tcp_wnd_end(tp) - TCP_SKB_CB(skb)->seq;
@@ -3367,10 +3366,8 @@ start:
 	 * our retransmit of one segment serves as a zero window probe.
 	 */
 	if (avail_wnd <= 0) {
-		if (TCP_SKB_CB(skb)->seq != tp->snd_una) {
-			err = -EAGAIN;
-			goto out;
-		}
+		if (TCP_SKB_CB(skb)->seq != tp->snd_una)
+			return -EAGAIN;
 		avail_wnd = cur_mss;
 	}
 
@@ -3382,15 +3379,11 @@ start:
 	}
 	if (skb->len > len) {
 		if (tcp_fragment(sk, TCP_FRAG_IN_RTX_QUEUE, skb, len,
-				 cur_mss, GFP_ATOMIC)) {
-			err = -ENOMEM;  /* We'll try again later. */
-			goto out;
-		}
+				 cur_mss, GFP_ATOMIC))
+			return -ENOMEM; /* We'll try again later. */
 	} else {
-		if (skb_unclone_keeptruesize(skb, GFP_ATOMIC)) {
-			err = -ENOMEM;
-			goto out;
-		}
+		if (skb_unclone_keeptruesize(skb, GFP_ATOMIC))
+			return -ENOMEM;
 
 		diff = tcp_skb_pcount(skb);
 		tcp_set_skb_tso_segs(skb, cur_mss);
@@ -3444,16 +3437,17 @@ start:
 		tcp_call_bpf_3arg(sk, BPF_SOCK_OPS_RETRANS_CB,
 				  TCP_SKB_CB(skb)->seq, segs, err);
 
-	if (unlikely(err) && err != -EBUSY)
+	if (likely(!err)) {
+		trace_tcp_retransmit_skb(sk, skb);
+	} else if (err != -EBUSY) {
 		NET_ADD_STATS(sock_net(sk), LINUX_MIB_TCPRETRANSFAIL, segs);
+	}
 
 	/* To avoid taking spuriously low RTT samples based on a timestamp
 	 * for a transmit that never happened, always mark EVER_RETRANS
 	 */
 	TCP_SKB_CB(skb)->sacked |= TCPCB_EVER_RETRANS;
 
-out:
-	trace_tcp_retransmit_skb(sk, skb, err);
 	return err;
 }
 
@@ -4437,7 +4431,6 @@ int tcp_rtx_synack(const struct sock *sk, struct request_sock *req)
 			tcp_sk_rw(sk)->total_retrans++;
 		}
 		trace_tcp_retransmit_synack(sk, req);
-		req->num_retrans++;
 	}
 	return res;
 }

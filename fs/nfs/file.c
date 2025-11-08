@@ -207,25 +207,24 @@ nfs_file_splice_read(struct file *in, loff_t *ppos, struct pipe_inode_info *pipe
 EXPORT_SYMBOL_GPL(nfs_file_splice_read);
 
 int
-nfs_file_mmap_prepare(struct vm_area_desc *desc)
+nfs_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
-	struct file *file = desc->file;
 	struct inode *inode = file_inode(file);
 	int	status;
 
 	dprintk("NFS: mmap(%pD2)\n", file);
 
-	/* Note: generic_file_mmap_prepare() returns ENOSYS on nommu systems
+	/* Note: generic_file_mmap() returns ENOSYS on nommu systems
 	 *       so we call that before revalidating the mapping
 	 */
-	status = generic_file_mmap_prepare(desc);
+	status = generic_file_mmap(file, vma);
 	if (!status) {
-		desc->vm_ops = &nfs_file_vm_ops;
+		vma->vm_ops = &nfs_file_vm_ops;
 		status = nfs_revalidate_mapping(inode, file->f_mapping);
 	}
 	return status;
 }
-EXPORT_SYMBOL_GPL(nfs_file_mmap_prepare);
+EXPORT_SYMBOL_GPL(nfs_file_mmap);
 
 /*
  * Flush any dirty pages for this process, and check for write errors.
@@ -343,14 +342,12 @@ static bool nfs_want_read_modify_write(struct file *file, struct folio *folio,
  * If the writer ends up delaying the write, the writer needs to
  * increment the page use counts until he is done with the page.
  */
-static int nfs_write_begin(const struct kiocb *iocb,
-			   struct address_space *mapping,
+static int nfs_write_begin(struct file *file, struct address_space *mapping,
 			   loff_t pos, unsigned len, struct folio **foliop,
 			   void **fsdata)
 {
 	fgf_t fgp = FGP_WRITEBEGIN;
 	struct folio *folio;
-	struct file *file = iocb->ki_filp;
 	int once_thru = 0;
 	int ret;
 
@@ -380,12 +377,10 @@ start:
 	return ret;
 }
 
-static int nfs_write_end(const struct kiocb *iocb,
-			 struct address_space *mapping,
+static int nfs_write_end(struct file *file, struct address_space *mapping,
 			 loff_t pos, unsigned len, unsigned copied,
 			 struct folio *folio, void *fsdata)
 {
-	struct file *file = iocb->ki_filp;
 	struct nfs_open_context *ctx = nfs_file_open_context(file);
 	unsigned offset = offset_in_folio(folio, pos);
 	int status;
@@ -904,7 +899,7 @@ const struct file_operations nfs_file_operations = {
 	.llseek		= nfs_file_llseek,
 	.read_iter	= nfs_file_read,
 	.write_iter	= nfs_file_write,
-	.mmap_prepare	= nfs_file_mmap_prepare,
+	.mmap		= nfs_file_mmap,
 	.open		= nfs_file_open,
 	.flush		= nfs_file_flush,
 	.release	= nfs_file_release,

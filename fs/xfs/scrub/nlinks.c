@@ -555,7 +555,9 @@ xchk_nlinks_collect(
 	 * do not take sb_internal.
 	 */
 	xchk_trans_cancel(sc);
-	xchk_trans_alloc_empty(sc);
+	error = xchk_trans_alloc_empty(sc);
+	if (error)
+		return error;
 
 	while ((error = xchk_iscan_iter(&xnc->collect_iscan, &ip)) == 1) {
 		if (S_ISDIR(VFS_I(ip)->i_mode))
@@ -878,7 +880,9 @@ xchk_nlinks_compare(
 	 * inactivation workqueue.
 	 */
 	xchk_trans_cancel(sc);
-	xchk_trans_alloc_empty(sc);
+	error = xchk_trans_alloc_empty(sc);
+	if (error)
+		return error;
 
 	/*
 	 * Use the inobt to walk all allocated inodes to compare the link

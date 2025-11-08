@@ -9,7 +9,6 @@
 #include <drm/clients/drm_client_setup.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_state_helper.h>
-#include <drm/drm_color_mgmt.h>
 #include <drm/drm_connector.h>
 #include <drm/drm_damage_helper.h>
 #include <drm/drm_device.h>
@@ -88,10 +87,15 @@ static struct vesadrm_device *to_vesadrm_device(struct drm_device *dev)
 static void vesadrm_vga_cmap_write(struct vesadrm_device *vesa, unsigned int index,
 				   u16 red, u16 green, u16 blue)
 {
-	u8 i8 = index;
-	u8 r8 = red >> 8;
-	u8 g8 = green >> 8;
-	u8 b8 = blue >> 8;
+	u8 i8, r8, g8, b8;
+
+	if (index > 255)
+		return;
+
+	i8 = index;
+	r8 = red >> 8;
+	g8 = green >> 8;
+	b8 = blue >> 8;
 
 	outb_p(i8, VGA_PEL_IW);
 	outb_p(r8, VGA_PEL_D);
@@ -116,6 +120,9 @@ static void vesadrm_pmi_cmap_write(struct vesadrm_device *vesa, unsigned int ind
 		0x00,
 	};
 
+	if (index > 255)
+		return;
+
 	__asm__ __volatile__ (
 		"call *(%%esi)"
 		: /* no return value */
@@ -128,36 +135,43 @@ static void vesadrm_pmi_cmap_write(struct vesadrm_device *vesa, unsigned int ind
 }
 #endif
 
-static void vesadrm_set_gamma_lut(struct drm_crtc *crtc, unsigned int index,
-				  u16 red, u16 green, u16 blue)
-{
-	struct drm_device *dev = crtc->dev;
-	struct vesadrm_device *vesa = to_vesadrm_device(dev);
-	u8 i8 = index & 0xff;
-
-	if (drm_WARN_ON_ONCE(dev, index != i8))
-		return; /* driver bug */
-
-	vesa->cmap_write(vesa, i8, red, green, blue);
-}
-
-static void vesadrm_fill_gamma_lut(struct vesadrm_device *vesa,
-				   const struct drm_format_info *format)
+static void vesadrm_set_gamma_linear(struct vesadrm_device *vesa,
+				     const struct drm_format_info *format)
 {
 	struct drm_device *dev = &vesa->sysfb.dev;
-	struct drm_crtc *crtc = &vesa->crtc;
+	size_t i;
+	u16 r16, g16, b16;
 
 	switch (format->format) {
 	case DRM_FORMAT_XRGB1555:
-		drm_crtc_fill_gamma_555(crtc, vesadrm_set_gamma_lut);
+		for (i = 0; i < 32; ++i) {
+			r16 = i * 8 + i / 4;
+			r16 |= (r16 << 8) | r16;
+			vesa->cmap_write(vesa, i, r16, r16, r16);
+		}
 		break;
 	case DRM_FORMAT_RGB565:
-		drm_crtc_fill_gamma_565(crtc, vesadrm_set_gamma_lut);
+		for (i = 0; i < 32; ++i) {
+			r16 = i * 8 + i / 4;
+			r16 |= (r16 << 8) | r16;
+			g16 = i * 4 + i / 16;
+			g16 |= (g16 << 8) | g16;
+			b16 = r16;
+			vesa->cmap_write(vesa, i, r16, g16, b16);
+		}
+		for (i = 32; i < 64; ++i) {
+			g16 = i * 4 + i / 16;
+			g16 |= (g16 << 8) | g16;
+			vesa->cmap_write(vesa, i, 0, g16, 0);
+		}
 		break;
 	case DRM_FORMAT_RGB888:
 	case DRM_FORMAT_XRGB8888:
 	case DRM_FORMAT_BGRX8888:
-		drm_crtc_fill_gamma_888(crtc, vesadrm_set_gamma_lut);
+		for (i = 0; i < 256; ++i) {
+			r16 = (i << 8) | i;
+			vesa->cmap_write(vesa, i, r16, r16, r16);
+		}
 		break;
 	default:
 		drm_warn_once(dev, "Unsupported format %p4cc for gamma correction\n",
@@ -166,24 +180,38 @@ static void vesadrm_fill_gamma_lut(struct vesadrm_device *vesa,
 	}
 }
 
-static void vesadrm_load_gamma_lut(struct vesadrm_device *vesa,
-				   const struct drm_format_info *format,
-				   struct drm_color_lut *lut)
+static void vesadrm_set_gamma_lut(struct vesadrm_device *vesa,
+				  const struct drm_format_info *format,
+				  struct drm_color_lut *lut)
 {
 	struct drm_device *dev = &vesa->sysfb.dev;
-	struct drm_crtc *crtc = &vesa->crtc;
+	size_t i;
+	u16 r16, g16, b16;
 
 	switch (format->format) {
 	case DRM_FORMAT_XRGB1555:
-		drm_crtc_load_gamma_555_from_888(crtc, lut, vesadrm_set_gamma_lut);
+		for (i = 0; i < 32; ++i) {
+			r16 = lut[i * 8 + i / 4].red;
+			g16 = lut[i * 8 + i / 4].green;
+			b16 = lut[i * 8 + i / 4].blue;
+			vesa->cmap_write(vesa, i, r16, g16, b16);
+		}
 		break;
 	case DRM_FORMAT_RGB565:
-		drm_crtc_load_gamma_565_from_888(crtc, lut, vesadrm_set_gamma_lut);
+		for (i = 0; i < 32; ++i) {
+			r16 = lut[i * 8 + i / 4].red;
+			g16 = lut[i * 4 + i / 16].green;
+			b16 = lut[i * 8 + i / 4].blue;
+			vesa->cmap_write(vesa, i, r16, g16, b16);
+		}
+		for (i = 32; i < 64; ++i)
+			vesa->cmap_write(vesa, i, 0, lut[i * 4 + i / 16].green, 0);
 		break;
 	case DRM_FORMAT_RGB888:
 	case DRM_FORMAT_XRGB8888:
 	case DRM_FORMAT_BGRX8888:
-		drm_crtc_load_gamma_888(crtc, lut, vesadrm_set_gamma_lut);
+		for (i = 0; i < 256; ++i)
+			vesa->cmap_write(vesa, i, lut[i].red, lut[i].green, lut[i].blue);
 		break;
 	default:
 		drm_warn_once(dev, "Unsupported format %p4cc for gamma correction\n",
@@ -225,13 +253,13 @@ static void vesadrm_crtc_helper_atomic_flush(struct drm_crtc *crtc,
 	if (crtc_state->enable && crtc_state->color_mgmt_changed) {
 		if (sysfb_crtc_state->format == sysfb->fb_format) {
 			if (crtc_state->gamma_lut)
-				vesadrm_load_gamma_lut(vesa,
-						       sysfb_crtc_state->format,
-						       crtc_state->gamma_lut->data);
+				vesadrm_set_gamma_lut(vesa,
+						      sysfb_crtc_state->format,
+						      crtc_state->gamma_lut->data);
 			else
-				vesadrm_fill_gamma_lut(vesa, sysfb_crtc_state->format);
+				vesadrm_set_gamma_linear(vesa, sysfb_crtc_state->format);
 		} else {
-			vesadrm_fill_gamma_lut(vesa, sysfb_crtc_state->format);
+			vesadrm_set_gamma_linear(vesa, sysfb_crtc_state->format);
 		}
 	}
 }
@@ -349,7 +377,7 @@ static struct vesadrm_device *vesadrm_device_create(struct drm_driver *drv,
 			drm_warn(dev, "hardware palette is unchangeable, colors may be incorrect\n");
 	}
 
-#if defined(CONFIG_FIRMWARE_EDID)
+#ifdef CONFIG_X86
 	if (drm_edid_header_is_valid(edid_info.dummy) == 8)
 		sysfb->edid = edid_info.dummy;
 #endif
@@ -407,8 +435,8 @@ static struct vesadrm_device *vesadrm_device_create(struct drm_driver *drv,
 
 	/* Primary plane */
 
-	nformats = drm_sysfb_build_fourcc_list(dev, &format->format, 1,
-					       vesa->formats, ARRAY_SIZE(vesa->formats));
+	nformats = drm_fb_build_fourcc_list(dev, &format->format, 1,
+					    vesa->formats, ARRAY_SIZE(vesa->formats));
 
 	primary_plane = &vesa->primary_plane;
 	ret = drm_universal_plane_init(dev, primary_plane, 0, &vesadrm_primary_plane_funcs,

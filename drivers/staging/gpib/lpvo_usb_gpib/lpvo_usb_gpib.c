@@ -791,6 +791,7 @@ static int usb_gpib_read(struct gpib_board *board,
 			return -EIO;
 		else
 			return -ETIME;
+		return 0;
 	}
 
 	/* allocate buffer for multibyte read */

@@ -3858,7 +3858,7 @@ int sdhci_resume_host(struct sdhci_host *host)
 
 EXPORT_SYMBOL_GPL(sdhci_resume_host);
 
-void sdhci_runtime_suspend_host(struct sdhci_host *host)
+int sdhci_runtime_suspend_host(struct sdhci_host *host)
 {
 	unsigned long flags;
 
@@ -3875,10 +3875,12 @@ void sdhci_runtime_suspend_host(struct sdhci_host *host)
 	spin_lock_irqsave(&host->lock, flags);
 	host->runtime_suspended = true;
 	spin_unlock_irqrestore(&host->lock, flags);
+
+	return 0;
 }
 EXPORT_SYMBOL_GPL(sdhci_runtime_suspend_host);
 
-void sdhci_runtime_resume_host(struct sdhci_host *host, int soft_reset)
+int sdhci_runtime_resume_host(struct sdhci_host *host, int soft_reset)
 {
 	struct mmc_host *mmc = host->mmc;
 	unsigned long flags;
@@ -3924,6 +3926,8 @@ void sdhci_runtime_resume_host(struct sdhci_host *host, int soft_reset)
 	sdhci_enable_card_detection(host);
 
 	spin_unlock_irqrestore(&host->lock, flags);
+
+	return 0;
 }
 EXPORT_SYMBOL_GPL(sdhci_runtime_resume_host);
 
@@ -4067,7 +4071,7 @@ struct sdhci_host *sdhci_alloc_host(struct device *dev,
 
 	WARN_ON(dev == NULL);
 
-	mmc = devm_mmc_alloc_host(dev, sizeof(struct sdhci_host) + priv_size);
+	mmc = mmc_alloc_host(sizeof(struct sdhci_host) + priv_size, dev);
 	if (!mmc)
 		return ERR_PTR(-ENOMEM);
 
@@ -4990,6 +4994,13 @@ void sdhci_remove_host(struct sdhci_host *host, int dead)
 }
 
 EXPORT_SYMBOL_GPL(sdhci_remove_host);
+
+void sdhci_free_host(struct sdhci_host *host)
+{
+	mmc_free_host(host->mmc);
+}
+
+EXPORT_SYMBOL_GPL(sdhci_free_host);
 
 /*****************************************************************************\
  *                                                                           *

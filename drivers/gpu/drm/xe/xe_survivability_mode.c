@@ -14,7 +14,6 @@
 #include "xe_device.h"
 #include "xe_gt.h"
 #include "xe_heci_gsc.h"
-#include "xe_i2c.h"
 #include "xe_mmio.h"
 #include "xe_pcode_api.h"
 #include "xe_vsec.h"
@@ -174,22 +173,20 @@ static int enable_survivability_mode(struct pci_dev *pdev)
 	survivability->mode = true;
 
 	ret = xe_heci_gsc_init(xe);
-	if (ret)
-		goto err;
+	if (ret) {
+		/*
+		 * But if it fails, device can't enter survivability
+		 * so move it back for correct error handling
+		 */
+		survivability->mode = false;
+		return ret;
+	}
 
 	xe_vsec_init(xe);
-
-	ret = xe_i2c_probe(xe);
-	if (ret)
-		goto err;
 
 	dev_err(dev, "In Survivability Mode\n");
 
 	return 0;
-
-err:
-	survivability->mode = false;
-	return ret;
 }
 
 /**

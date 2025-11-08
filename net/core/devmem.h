@@ -56,9 +56,6 @@ struct net_devmem_dmabuf_binding {
 	 */
 	u32 id;
 
-	/* DMA direction, FROM_DEVICE for Rx binding, TO_DEVICE for Tx. */
-	enum dma_data_direction direction;
-
 	/* Array of net_iov pointers for this binding, sorted by virtual
 	 * address. This array is convenient to map the virtual addresses to
 	 * net_iovs in the TX path.
@@ -165,6 +162,10 @@ static inline void net_devmem_get_net_iov(struct net_iov *niov)
 }
 
 static inline void net_devmem_put_net_iov(struct net_iov *niov)
+{
+}
+
+static inline void __net_devmem_dmabuf_binding_free(struct work_struct *wq)
 {
 }
 

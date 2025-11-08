@@ -19,6 +19,8 @@
 #include <linux/spi/spi.h>
 #include <linux/gpio/consumer.h>
 
+#define DRV_NAME "hi8435"
+
 /* Register offsets for HI-8435 */
 #define HI8435_CTRL_REG		0x02
 #define HI8435_PSEN_REG		0x04
@@ -534,7 +536,7 @@ MODULE_DEVICE_TABLE(spi, hi8435_id);
 
 static struct spi_driver hi8435_driver = {
 	.driver	= {
-		.name		= "hi8435",
+		.name		= DRV_NAME,
 		.of_match_table	= hi8435_dt_ids,
 	},
 	.probe		= hi8435_probe,

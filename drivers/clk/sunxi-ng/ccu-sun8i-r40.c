@@ -439,7 +439,7 @@ static SUNXI_CCU_GATE(bus_i2c2_clk,	"bus-i2c2",	"apb2",
 static SUNXI_CCU_GATE(bus_i2c3_clk,	"bus-i2c3",	"apb2",
 		      0x06c, BIT(3), 0);
 /*
- * In datasheet here's "Reserved", however the gate exists in BSP source
+ * In datasheet here's "Reserved", however the gate exists in BSP soucre
  * code.
  */
 static SUNXI_CCU_GATE(bus_can_clk,	"bus-can",	"apb2",

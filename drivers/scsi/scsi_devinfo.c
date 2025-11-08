@@ -269,12 +269,17 @@ static struct {
 static struct scsi_dev_info_list_table *scsi_devinfo_lookup_by_key(int key)
 {
 	struct scsi_dev_info_list_table *devinfo_table;
+	int found = 0;
 
 	list_for_each_entry(devinfo_table, &scsi_dev_info_list, node)
-		if (devinfo_table->key == key)
-			return devinfo_table;
+		if (devinfo_table->key == key) {
+			found = 1;
+			break;
+		}
+	if (!found)
+		return ERR_PTR(-EINVAL);
 
-	return ERR_PTR(-EINVAL);
+	return devinfo_table;
 }
 
 /*

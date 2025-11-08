@@ -123,10 +123,6 @@ void BPF_STRUCT_OPS(maximal_cgroup_cancel_move, struct task_struct *p,
 void BPF_STRUCT_OPS(maximal_cgroup_set_weight, struct cgroup *cgrp, u32 weight)
 {}
 
-void BPF_STRUCT_OPS(maximal_cgroup_set_bandwidth, struct cgroup *cgrp,
-		    u64 period_us, u64 quota_us, u64 burst_us)
-{}
-
 s32 BPF_STRUCT_OPS_SLEEPABLE(maximal_init)
 {
 	return scx_bpf_create_dsq(DSQ_ID, -1);
@@ -164,7 +160,6 @@ struct sched_ext_ops maximal_ops = {
 	.cgroup_move		= (void *) maximal_cgroup_move,
 	.cgroup_cancel_move	= (void *) maximal_cgroup_cancel_move,
 	.cgroup_set_weight	= (void *) maximal_cgroup_set_weight,
-	.cgroup_set_bandwidth	= (void *) maximal_cgroup_set_bandwidth,
 	.init			= (void *) maximal_init,
 	.exit			= (void *) maximal_exit,
 	.name			= "maximal",

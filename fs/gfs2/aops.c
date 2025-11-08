@@ -159,11 +159,7 @@ static int gfs2_writepages(struct address_space *mapping,
 			   struct writeback_control *wbc)
 {
 	struct gfs2_sbd *sdp = gfs2_mapping2sbd(mapping);
-	struct iomap_writepage_ctx wpc = {
-		.inode		= mapping->host,
-		.wbc		= wbc,
-		.ops		= &gfs2_writeback_ops,
-	};
+	struct iomap_writepage_ctx wpc = { };
 	int ret;
 
 	/*
@@ -172,7 +168,7 @@ static int gfs2_writepages(struct address_space *mapping,
 	 * want balance_dirty_pages() to loop indefinitely trying to write out
 	 * pages held in the ail that it can't find.
 	 */
-	ret = iomap_writepages(&wpc);
+	ret = iomap_writepages(mapping, wbc, &wpc, &gfs2_writeback_ops);
 	if (ret == 0 && wbc->nr_to_write > 0)
 		set_bit(SDF_FORCE_AIL_FLUSH, &sdp->sd_flags);
 	return ret;

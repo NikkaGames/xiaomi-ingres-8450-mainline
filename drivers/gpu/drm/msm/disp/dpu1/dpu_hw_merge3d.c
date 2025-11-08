@@ -33,7 +33,8 @@ static void dpu_hw_merge_3d_setup_3d_mode(struct dpu_hw_merge_3d *merge_3d,
 	}
 }
 
-static void _setup_merge_3d_ops(struct dpu_hw_merge_3d *c)
+static void _setup_merge_3d_ops(struct dpu_hw_merge_3d *c,
+				unsigned long features)
 {
 	c->ops.setup_3d_mode = dpu_hw_merge_3d_setup_3d_mode;
 };
@@ -61,7 +62,7 @@ struct dpu_hw_merge_3d *dpu_hw_merge_3d_init(struct drm_device *dev,
 
 	c->idx = cfg->id;
 	c->caps = cfg;
-	_setup_merge_3d_ops(c);
+	_setup_merge_3d_ops(c, c->caps->features);
 
 	return c;
 }

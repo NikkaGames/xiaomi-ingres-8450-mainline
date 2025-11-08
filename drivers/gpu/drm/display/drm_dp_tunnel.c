@@ -3,7 +3,6 @@
  * Copyright © 2023 Intel Corporation
  */
 
-#include <linux/export.h>
 #include <linux/ref_tracker.h>
 #include <linux/types.h>
 
@@ -1921,7 +1920,7 @@ drm_dp_tunnel_mgr_create(struct drm_device *dev, int max_group_count)
 	}
 
 #ifdef CONFIG_DRM_DISPLAY_DP_TUNNEL_STATE_DEBUG
-	ref_tracker_dir_init(&mgr->ref_tracker, 16, "drm_dptun");
+	ref_tracker_dir_init(&mgr->ref_tracker, 16, "dptun");
 #endif
 
 	for (i = 0; i < max_group_count; i++) {

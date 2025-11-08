@@ -1055,31 +1055,20 @@ err_cqb:
 	return err;
 }
 
-int mlx5_ib_pre_destroy_cq(struct ib_cq *cq)
+int mlx5_ib_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
 {
 	struct mlx5_ib_dev *dev = to_mdev(cq->device);
 	struct mlx5_ib_cq *mcq = to_mcq(cq);
-
-	return mlx5_core_destroy_cq(dev->mdev, &mcq->mcq);
-}
-
-void mlx5_ib_post_destroy_cq(struct ib_cq *cq)
-{
-	destroy_cq_kernel(to_mdev(cq->device), to_mcq(cq));
-}
-
-int mlx5_ib_destroy_cq(struct ib_cq *cq, struct ib_udata *udata)
-{
 	int ret;
 
-	ret = mlx5_ib_pre_destroy_cq(cq);
+	ret = mlx5_core_destroy_cq(dev->mdev, &mcq->mcq);
 	if (ret)
 		return ret;
 
 	if (udata)
-		destroy_cq_user(to_mcq(cq), udata);
+		destroy_cq_user(mcq, udata);
 	else
-		mlx5_ib_post_destroy_cq(cq);
+		destroy_cq_kernel(dev, mcq);
 	return 0;
 }
 

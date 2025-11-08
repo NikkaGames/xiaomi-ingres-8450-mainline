@@ -8,7 +8,6 @@
  * Copyright IBM Corp. 1999, 2009
  */
 
-#include <linux/export.h>
 #include <linux/kmod.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>

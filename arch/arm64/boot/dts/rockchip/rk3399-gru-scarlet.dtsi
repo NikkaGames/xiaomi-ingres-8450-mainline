@@ -627,10 +627,8 @@ camera: &i2c7 {
 };
 
 &mipi_dsi {
-	clock-master;
-	#address-cells = <1>;
-	#size-cells = <0>;
 	status = "okay";
+	clock-master;
 
 	ports {
 		mipi_out: port@1 {

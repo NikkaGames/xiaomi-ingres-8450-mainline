@@ -664,6 +664,7 @@ static const struct drm_bridge_funcs venc_bridge_funcs = {
 
 static void venc_bridge_init(struct venc_device *venc)
 {
+	venc->bridge.funcs = &venc_bridge_funcs;
 	venc->bridge.of_node = venc->pdev->dev.of_node;
 	venc->bridge.ops = DRM_BRIDGE_OP_MODES;
 	venc->bridge.type = DRM_MODE_CONNECTOR_SVIDEO;
@@ -808,9 +809,9 @@ static int venc_probe(struct platform_device *pdev)
 	struct venc_device *venc;
 	int r;
 
-	venc = devm_drm_bridge_alloc(&pdev->dev, struct venc_device, bridge, &venc_bridge_funcs);
-	if (IS_ERR(venc))
-		return PTR_ERR(venc);
+	venc = kzalloc(sizeof(*venc), GFP_KERNEL);
+	if (!venc)
+		return -ENOMEM;
 
 	venc->pdev = pdev;
 
@@ -823,24 +824,26 @@ static int venc_probe(struct platform_device *pdev)
 	venc->config = &venc_config_pal_trm;
 
 	venc->base = devm_platform_ioremap_resource(pdev, 0);
-	if (IS_ERR(venc->base))
-		return PTR_ERR(venc->base);
+	if (IS_ERR(venc->base)) {
+		r = PTR_ERR(venc->base);
+		goto err_free;
+	}
 
 	venc->vdda_dac_reg = devm_regulator_get(&pdev->dev, "vdda");
 	if (IS_ERR(venc->vdda_dac_reg)) {
 		r = PTR_ERR(venc->vdda_dac_reg);
 		if (r != -EPROBE_DEFER)
 			DSSERR("can't get VDDA_DAC regulator\n");
-		return r;
+		goto err_free;
 	}
 
 	r = venc_get_clocks(venc);
 	if (r)
-		return r;
+		goto err_free;
 
 	r = venc_probe_of(venc);
 	if (r)
-		return r;
+		goto err_free;
 
 	pm_runtime_enable(&pdev->dev);
 
@@ -858,6 +861,8 @@ err_uninit_output:
 	venc_uninit_output(venc);
 err_pm_disable:
 	pm_runtime_disable(&pdev->dev);
+err_free:
+	kfree(venc);
 	return r;
 }
 
@@ -870,6 +875,8 @@ static void venc_remove(struct platform_device *pdev)
 	venc_uninit_output(venc);
 
 	pm_runtime_disable(&pdev->dev);
+
+	kfree(venc);
 }
 
 static __maybe_unused int venc_runtime_suspend(struct device *dev)

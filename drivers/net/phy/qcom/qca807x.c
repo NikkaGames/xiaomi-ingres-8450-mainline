@@ -124,7 +124,6 @@ struct qca807x_priv {
 	bool dac_full_amplitude;
 	bool dac_full_bias_current;
 	bool dac_disable_bias_current_tweak;
-	struct qcom_phy_hw_stats hw_stats;
 };
 
 static int qca807x_cable_test_start(struct phy_device *phydev)
@@ -378,7 +377,7 @@ static int qca807x_gpio_get(struct gpio_chip *gc, unsigned int offset)
 	return FIELD_GET(QCA807X_GPIO_FORCE_MODE_MASK, val);
 }
 
-static int qca807x_gpio_set(struct gpio_chip *gc, unsigned int offset, int value)
+static void qca807x_gpio_set(struct gpio_chip *gc, unsigned int offset, int value)
 {
 	struct qca807x_gpio_priv *priv = gpiochip_get_data(gc);
 	u16 reg;
@@ -387,19 +386,18 @@ static int qca807x_gpio_set(struct gpio_chip *gc, unsigned int offset, int value
 	reg = QCA807X_MMD7_LED_FORCE_CTRL(offset);
 
 	val = phy_read_mmd(priv->phy, MDIO_MMD_AN, reg);
-	if (val < 0)
-		return val;
-
 	val &= ~QCA807X_GPIO_FORCE_MODE_MASK;
 	val |= QCA807X_GPIO_FORCE_EN;
 	val |= FIELD_PREP(QCA807X_GPIO_FORCE_MODE_MASK, value);
 
-	return phy_write_mmd(priv->phy, MDIO_MMD_AN, reg, val);
+	phy_write_mmd(priv->phy, MDIO_MMD_AN, reg, val);
 }
 
 static int qca807x_gpio_dir_out(struct gpio_chip *gc, unsigned int offset, int value)
 {
-	return qca807x_gpio_set(gc, offset, value);
+	qca807x_gpio_set(gc, offset, value);
+
+	return 0;
 }
 
 static int qca807x_gpio(struct phy_device *phydev)
@@ -769,10 +767,6 @@ static int qca807x_config_init(struct phy_device *phydev)
 			return ret;
 	}
 
-	ret = qcom_phy_counter_config(phydev);
-	if (ret)
-		return ret;
-
 	control_dac = phy_read_mmd(phydev, MDIO_MMD_AN,
 				   QCA807X_MMD7_1000BASE_T_POWER_SAVE_PER_CABLE_LENGTH);
 	control_dac &= ~QCA807X_CONTROL_DAC_MASK;
@@ -785,22 +779,6 @@ static int qca807x_config_init(struct phy_device *phydev)
 	return phy_write_mmd(phydev, MDIO_MMD_AN,
 			     QCA807X_MMD7_1000BASE_T_POWER_SAVE_PER_CABLE_LENGTH,
 			     control_dac);
-}
-
-static int qca807x_update_stats(struct phy_device *phydev)
-{
-	struct qca807x_priv *priv = phydev->priv;
-
-	return qcom_phy_update_stats(phydev, &priv->hw_stats);
-}
-
-static void qca807x_get_phy_stats(struct phy_device *phydev,
-				  struct ethtool_eth_phy_stats *eth_stats,
-				  struct ethtool_phy_stats *stats)
-{
-	struct qca807x_priv *priv = phydev->priv;
-
-	qcom_phy_get_stats(stats, priv->hw_stats);
 }
 
 static struct phy_driver qca807x_drivers[] = {
@@ -821,10 +799,6 @@ static struct phy_driver qca807x_drivers[] = {
 		.suspend	= genphy_suspend,
 		.cable_test_start	= qca807x_cable_test_start,
 		.cable_test_get_status	= qca808x_cable_test_get_status,
-		.update_stats		= qca807x_update_stats,
-		.get_phy_stats		= qca807x_get_phy_stats,
-		.set_wol		= at8031_set_wol,
-		.get_wol		= at803x_get_wol,
 	},
 	{
 		PHY_ID_MATCH_EXACT(PHY_ID_QCA8075),
@@ -848,10 +822,6 @@ static struct phy_driver qca807x_drivers[] = {
 		.led_hw_is_supported = qca807x_led_hw_is_supported,
 		.led_hw_control_set = qca807x_led_hw_control_set,
 		.led_hw_control_get = qca807x_led_hw_control_get,
-		.update_stats		= qca807x_update_stats,
-		.get_phy_stats		= qca807x_get_phy_stats,
-		.set_wol		= at8031_set_wol,
-		.get_wol		= at803x_get_wol,
 	},
 };
 module_phy_driver(qca807x_drivers);

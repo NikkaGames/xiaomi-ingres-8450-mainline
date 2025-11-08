@@ -30,12 +30,18 @@
  * instantiated by the core.
  */
 
+/*
+ * All changes to the interleave configuration occur with this lock held
+ * for write.
+ */
+DECLARE_RWSEM(cxl_region_rwsem);
+
 static DEFINE_IDA(cxl_port_ida);
 static DEFINE_XARRAY(cxl_root_buses);
 
 int cxl_num_decoders_committed(struct cxl_port *port)
 {
-	lockdep_assert_held(&cxl_rwsem.region);
+	lockdep_assert_held(&cxl_region_rwsem);
 
 	return port->commit_end + 1;
 }
@@ -170,7 +176,7 @@ static ssize_t target_list_show(struct device *dev,
 	ssize_t offset;
 	int rc;
 
-	guard(rwsem_read)(&cxl_rwsem.region);
+	guard(rwsem_read)(&cxl_region_rwsem);
 	rc = emit_target_list(cxlsd, buf);
 	if (rc < 0)
 		return rc;
@@ -190,7 +196,7 @@ static ssize_t mode_show(struct device *dev, struct device_attribute *attr,
 	struct cxl_endpoint_decoder *cxled = to_cxl_endpoint_decoder(dev);
 	struct cxl_memdev *cxlmd = cxled_to_memdev(cxled);
 	struct cxl_dev_state *cxlds = cxlmd->cxlds;
-	/* without @cxl_rwsem.dpa, make sure @part is not reloaded */
+	/* without @cxl_dpa_rwsem, make sure @part is not reloaded */
 	int part = READ_ONCE(cxled->part);
 	const char *desc;
 
@@ -229,7 +235,7 @@ static ssize_t dpa_resource_show(struct device *dev, struct device_attribute *at
 {
 	struct cxl_endpoint_decoder *cxled = to_cxl_endpoint_decoder(dev);
 
-	guard(rwsem_read)(&cxl_rwsem.dpa);
+	guard(rwsem_read)(&cxl_dpa_rwsem);
 	return sysfs_emit(buf, "%#llx\n", (u64)cxl_dpa_resource_start(cxled));
 }
 static DEVICE_ATTR_RO(dpa_resource);
@@ -554,7 +560,7 @@ static ssize_t decoders_committed_show(struct device *dev,
 {
 	struct cxl_port *port = to_cxl_port(dev);
 
-	guard(rwsem_read)(&cxl_rwsem.region);
+	guard(rwsem_read)(&cxl_region_rwsem);
 	return sysfs_emit(buf, "%d\n", cxl_num_decoders_committed(port));
 }
 
@@ -1716,7 +1722,7 @@ static int decoder_populate_targets(struct cxl_switch_decoder *cxlsd,
 	if (xa_empty(&port->dports))
 		return -EINVAL;
 
-	guard(rwsem_write)(&cxl_rwsem.region);
+	guard(rwsem_write)(&cxl_region_rwsem);
 	for (i = 0; i < cxlsd->cxld.interleave_ways; i++) {
 		struct cxl_dport *dport = find_dport(port, target_map[i]);
 
@@ -1995,9 +2001,12 @@ EXPORT_SYMBOL_NS_GPL(cxl_decoder_add, "CXL");
 
 static void cxld_unregister(void *dev)
 {
-	if (is_endpoint_decoder(dev))
-		cxl_decoder_detach(NULL, to_cxl_endpoint_decoder(dev), -1,
-				   DETACH_INVALIDATE);
+	struct cxl_endpoint_decoder *cxled;
+
+	if (is_endpoint_decoder(dev)) {
+		cxled = to_cxl_endpoint_decoder(dev);
+		cxl_decoder_kill_region(cxled);
+	}
 
 	device_unregister(dev);
 }
@@ -2284,7 +2293,7 @@ static const struct attribute_group *cxl_bus_attribute_groups[] = {
 	NULL,
 };
 
-const struct bus_type cxl_bus_type = {
+struct bus_type cxl_bus_type = {
 	.name = "cxl",
 	.uevent = cxl_bus_uevent,
 	.match = cxl_bus_match,

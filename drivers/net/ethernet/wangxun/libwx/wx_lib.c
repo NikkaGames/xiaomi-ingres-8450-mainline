@@ -1813,7 +1813,7 @@ static int wx_set_interrupt_capability(struct wx *wx)
 
 	/* We will try to get MSI-X interrupts first */
 	ret = wx_acquire_msix_vectors(wx);
-	if (ret == 0 || (ret == -ENOMEM) || pdev->is_virtfn)
+	if (ret == 0 || (ret == -ENOMEM))
 		return ret;
 
 	/* Disable VMDq support */
@@ -2164,12 +2164,7 @@ int wx_init_interrupt_scheme(struct wx *wx)
 	int ret;
 
 	/* Number of supported queues */
-	if (wx->pdev->is_virtfn) {
-		if (wx->set_num_queues)
-			wx->set_num_queues(wx);
-	} else {
-		wx_set_num_queues(wx);
-	}
+	wx_set_num_queues(wx);
 
 	/* Set interrupt mode */
 	ret = wx_set_interrupt_capability(wx);

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Check Arm SPE doesn't hang when there are forks
 
 # SPDX-License-Identifier: GPL-2.0

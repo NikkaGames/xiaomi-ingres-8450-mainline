@@ -183,9 +183,6 @@ static int debugfs_reconfigure(struct fs_context *fc)
 	struct debugfs_fs_info *sb_opts = sb->s_fs_info;
 	struct debugfs_fs_info *new_opts = fc->s_fs_info;
 
-	if (!new_opts)
-		return 0;
-
 	sync_filesystem(sb);
 
 	/* structure copy of new mount options to sb */
@@ -261,6 +258,7 @@ static struct vfsmount *debugfs_automount(struct path *path)
 }
 
 static const struct dentry_operations debugfs_dops = {
+	.d_delete = always_delete_dentry,
 	.d_release = debugfs_release_dentry,
 	.d_automount = debugfs_automount,
 };
@@ -275,8 +273,7 @@ static int debugfs_fill_super(struct super_block *sb, struct fs_context *fc)
 		return err;
 
 	sb->s_op = &debugfs_super_operations;
-	set_default_d_op(sb, &debugfs_dops);
-	sb->s_d_flags |= DCACHE_DONTCACHE;
+	sb->s_d_op = &debugfs_dops;
 
 	debugfs_apply_options(sb);
 
@@ -285,16 +282,10 @@ static int debugfs_fill_super(struct super_block *sb, struct fs_context *fc)
 
 static int debugfs_get_tree(struct fs_context *fc)
 {
-	int err;
-
 	if (!(debugfs_allow & DEBUGFS_ALLOW_API))
 		return -EPERM;
 
-	err = get_tree_single(fc, debugfs_fill_super);
-	if (err)
-		return err;
-
-	return debugfs_reconfigure(fc);
+	return get_tree_single(fc, debugfs_fill_super);
 }
 
 static void debugfs_free_fc(struct fs_context *fc)
@@ -393,12 +384,27 @@ static struct dentry *start_creating(const char *name, struct dentry *parent)
 	if (!parent)
 		parent = debugfs_mount->mnt_root;
 
-	dentry = simple_start_creating(parent, name);
+	inode_lock(d_inode(parent));
+	if (unlikely(IS_DEADDIR(d_inode(parent))))
+		dentry = ERR_PTR(-ENOENT);
+	else
+		dentry = lookup_noperm(&QSTR(name), parent);
+	if (!IS_ERR(dentry) && d_really_is_positive(dentry)) {
+		if (d_is_dir(dentry))
+			pr_err("Directory '%s' with parent '%s' already present!\n",
+			       name, parent->d_name.name);
+		else
+			pr_err("File '%s' in directory '%s' already present!\n",
+			       name, parent->d_name.name);
+		dput(dentry);
+		dentry = ERR_PTR(-EEXIST);
+	}
+
 	if (IS_ERR(dentry)) {
-		if (dentry == ERR_PTR(-EEXIST))
-			pr_err("'%s' already exists in '%pd'\n", name, parent);
+		inode_unlock(d_inode(parent));
 		simple_release_fs(&debugfs_mount, &debugfs_mount_count);
 	}
+
 	return dentry;
 }
 
@@ -453,7 +459,7 @@ static struct dentry *__debugfs_create_file(const char *name, umode_t mode,
 		proxy_fops = &debugfs_noop_file_operations;
 	inode->i_fop = proxy_fops;
 	DEBUGFS_I(inode)->raw = real_fops;
-	DEBUGFS_I(inode)->aux = (void *)aux;
+	DEBUGFS_I(inode)->aux = aux;
 
 	d_instantiate(dentry, inode);
 	fsnotify_create(d_inode(dentry->d_parent), dentry);

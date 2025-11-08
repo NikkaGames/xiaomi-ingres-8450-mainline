@@ -29,6 +29,19 @@
 
 #define CRYPTO_ALG_TYPE_AHASH_MASK	0x0000000e
 
+struct crypto_hash_walk {
+	const char *data;
+
+	unsigned int offset;
+	unsigned int flags;
+
+	struct page *pg;
+	unsigned int entrylen;
+
+	unsigned int total;
+	struct scatterlist *sg;
+};
+
 static int ahash_def_finup(struct ahash_request *req);
 
 static inline bool crypto_ahash_block_only(struct crypto_ahash *tfm)
@@ -99,8 +112,8 @@ static int hash_walk_new_entry(struct crypto_hash_walk *walk)
 	return hash_walk_next(walk);
 }
 
-int crypto_hash_walk_first(struct ahash_request *req,
-			   struct crypto_hash_walk *walk)
+static int crypto_hash_walk_first(struct ahash_request *req,
+				  struct crypto_hash_walk *walk)
 {
 	walk->total = req->nbytes;
 	walk->entrylen = 0;
@@ -120,9 +133,8 @@ int crypto_hash_walk_first(struct ahash_request *req,
 
 	return hash_walk_new_entry(walk);
 }
-EXPORT_SYMBOL_GPL(crypto_hash_walk_first);
 
-int crypto_hash_walk_done(struct crypto_hash_walk *walk, int err)
+static int crypto_hash_walk_done(struct crypto_hash_walk *walk, int err)
 {
 	if ((walk->flags & CRYPTO_AHASH_REQ_VIRT))
 		return err;
@@ -148,7 +160,11 @@ int crypto_hash_walk_done(struct crypto_hash_walk *walk, int err)
 
 	return hash_walk_new_entry(walk);
 }
-EXPORT_SYMBOL_GPL(crypto_hash_walk_done);
+
+static inline int crypto_hash_walk_last(struct crypto_hash_walk *walk)
+{
+	return !(walk->entrylen | walk->total);
+}
 
 /*
  * For an ahash tfm that is using an shash algorithm (instead of an ahash
@@ -329,12 +345,6 @@ static int ahash_do_req_chain(struct ahash_request *req,
 		return (*op)(req);
 
 	if (crypto_ahash_statesize(tfm) > HASH_MAX_STATESIZE)
-		return -ENOSYS;
-
-	if (!crypto_ahash_need_fallback(tfm))
-		return -ENOSYS;
-
-	if (crypto_hash_no_export_core(tfm))
 		return -ENOSYS;
 
 	{
@@ -944,10 +954,6 @@ static int ahash_prepare_alg(struct ahash_alg *alg)
 	    base->cra_reqsize > MAX_SYNC_HASH_REQSIZE)
 		return -EINVAL;
 
-	if (base->cra_flags & CRYPTO_ALG_NEED_FALLBACK &&
-	    base->cra_flags & CRYPTO_ALG_NO_FALLBACK)
-		return -EINVAL;
-
 	err = hash_prepare_alg(&alg->halg);
 	if (err)
 		return err;
@@ -956,8 +962,7 @@ static int ahash_prepare_alg(struct ahash_alg *alg)
 	base->cra_flags |= CRYPTO_ALG_TYPE_AHASH;
 
 	if ((base->cra_flags ^ CRYPTO_ALG_REQ_VIRT) &
-	    (CRYPTO_ALG_ASYNC | CRYPTO_ALG_REQ_VIRT) &&
-	    !(base->cra_flags & CRYPTO_ALG_NO_FALLBACK))
+	    (CRYPTO_ALG_ASYNC | CRYPTO_ALG_REQ_VIRT))
 		base->cra_flags |= CRYPTO_ALG_NEED_FALLBACK;
 
 	if (!alg->setkey)

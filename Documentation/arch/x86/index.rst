@@ -28,7 +28,6 @@ x86-specific Documentation
    amd-debugging
    amd-memory-encryption
    amd_hsmp
-   amd-hfi
    tdx
    pti
    mds

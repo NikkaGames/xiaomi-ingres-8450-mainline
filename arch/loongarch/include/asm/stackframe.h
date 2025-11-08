@@ -58,7 +58,7 @@
 	.endm
 
 	.macro STACKLEAK_ERASE
-#ifdef CONFIG_KSTACK_ERASE
+#ifdef CONFIG_GCC_PLUGIN_STACKLEAK
 	bl	stackleak_erase_on_task_stack
 #endif
 	.endm

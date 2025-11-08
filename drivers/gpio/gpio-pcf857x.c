@@ -171,24 +171,21 @@ static int pcf857x_output(struct gpio_chip *chip, unsigned int offset, int value
 	return status;
 }
 
-static int pcf857x_set(struct gpio_chip *chip, unsigned int offset, int value)
+static void pcf857x_set(struct gpio_chip *chip, unsigned int offset, int value)
 {
-	return pcf857x_output(chip, offset, value);
+	pcf857x_output(chip, offset, value);
 }
 
-static int pcf857x_set_multiple(struct gpio_chip *chip, unsigned long *mask,
-				unsigned long *bits)
+static void pcf857x_set_multiple(struct gpio_chip *chip, unsigned long *mask,
+				 unsigned long *bits)
 {
 	struct pcf857x *gpio = gpiochip_get_data(chip);
-	int status;
 
 	mutex_lock(&gpio->lock);
 	gpio->out &= ~*mask;
 	gpio->out |= *bits & *mask;
-	status = gpio->write(gpio->client, gpio->out);
+	gpio->write(gpio->client, gpio->out);
 	mutex_unlock(&gpio->lock);
-
-	return status;
 }
 
 /*-------------------------------------------------------------------------*/

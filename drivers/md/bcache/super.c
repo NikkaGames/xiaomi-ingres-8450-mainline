@@ -168,14 +168,14 @@ static const char *read_super(struct cache_sb *sb, struct block_device *bdev,
 {
 	const char *err;
 	struct cache_sb_disk *s;
-	struct folio *folio;
+	struct page *page;
 	unsigned int i;
 
-	folio = mapping_read_folio_gfp(bdev->bd_mapping,
-			SB_OFFSET >> PAGE_SHIFT, GFP_KERNEL);
-	if (IS_ERR(folio))
+	page = read_cache_page_gfp(bdev->bd_mapping,
+				   SB_OFFSET >> PAGE_SHIFT, GFP_KERNEL);
+	if (IS_ERR(page))
 		return "IO error";
-	s = folio_address(folio) + offset_in_folio(folio, SB_OFFSET);
+	s = page_address(page) + offset_in_page(SB_OFFSET);
 
 	sb->offset		= le64_to_cpu(s->offset);
 	sb->version		= le64_to_cpu(s->version);
@@ -272,7 +272,7 @@ static const char *read_super(struct cache_sb *sb, struct block_device *bdev,
 	*res = s;
 	return NULL;
 err:
-	folio_put(folio);
+	put_page(page);
 	return err;
 }
 
@@ -1366,7 +1366,7 @@ static CLOSURE_CALLBACK(cached_dev_free)
 	mutex_unlock(&bch_register_lock);
 
 	if (dc->sb_disk)
-		folio_put(virt_to_folio(dc->sb_disk));
+		put_page(virt_to_page(dc->sb_disk));
 
 	if (dc->bdev_file)
 		fput(dc->bdev_file);
@@ -2216,7 +2216,7 @@ void bch_cache_release(struct kobject *kobj)
 		free_fifo(&ca->free[i]);
 
 	if (ca->sb_disk)
-		folio_put(virt_to_folio(ca->sb_disk));
+		put_page(virt_to_page(ca->sb_disk));
 
 	if (ca->bdev_file)
 		fput(ca->bdev_file);
@@ -2593,7 +2593,7 @@ static ssize_t register_bcache(struct kobject *k, struct kobj_attribute *attr,
 	if (!holder) {
 		ret = -ENOMEM;
 		err = "cannot allocate memory";
-		goto out_put_sb_folio;
+		goto out_put_sb_page;
 	}
 
 	/* Now reopen in exclusive mode with proper holder */
@@ -2667,8 +2667,8 @@ async_done:
 
 out_free_holder:
 	kfree(holder);
-out_put_sb_folio:
-	folio_put(virt_to_folio(sb_disk));
+out_put_sb_page:
+	put_page(virt_to_page(sb_disk));
 out_blkdev_put:
 	if (bdev_file)
 		fput(bdev_file);

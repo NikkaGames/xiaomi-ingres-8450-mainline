@@ -209,7 +209,6 @@ properties:
               - samsung,hlte
               - sony,xperia-amami
               - sony,xperia-honami
-              - sony,xperia-togari
           - const: qcom,msm8974
 
       - items:
@@ -230,11 +229,6 @@ properties:
           - const: samsung,klte
           - const: qcom,msm8974pro
           - const: qcom,msm8974
-
-      - items:
-          - enum:
-              - longcheer,l9360
-          - const: qcom,msm8976
 
       - items:
           - enum:

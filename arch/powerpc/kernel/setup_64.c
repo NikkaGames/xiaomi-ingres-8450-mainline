@@ -141,7 +141,10 @@ void __init check_smt_enabled(void)
 			smt_enabled_at_boot = 0;
 		else {
 			int smt;
-			if (!kstrtoint(smt_enabled_cmdline, 10, &smt))
+			int rc;
+
+			rc = kstrtoint(smt_enabled_cmdline, 10, &smt);
+			if (!rc)
 				smt_enabled_at_boot =
 					min(threads_per_core, smt);
 		}

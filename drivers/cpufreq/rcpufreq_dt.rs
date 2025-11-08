@@ -9,6 +9,7 @@ use kernel::{
     cpumask::CpumaskVar,
     device::{Core, Device},
     error::code::*,
+    fmt,
     macros::vtable,
     module_platform_driver, of, opp, platform,
     prelude::*,
@@ -18,9 +19,8 @@ use kernel::{
 
 /// Finds exact supply name from the OF node.
 fn find_supply_name_exact(dev: &Device, name: &str) -> Option<CString> {
-    let prop_name = CString::try_from_fmt(fmt!("{name}-supply")).ok()?;
-    dev.fwnode()?
-        .property_present(&prop_name)
+    let prop_name = CString::try_from_fmt(fmt!("{}-supply", name)).ok()?;
+    dev.property_present(&prop_name)
         .then(|| CString::try_from_fmt(fmt!("{name}")).ok())
         .flatten()
 }
@@ -220,7 +220,7 @@ impl platform::Driver for CPUFreqDTDriver {
 module_platform_driver! {
     type: CPUFreqDTDriver,
     name: "cpufreq-dt",
-    authors: ["Viresh Kumar <viresh.kumar@linaro.org>"],
+    author: "Viresh Kumar <viresh.kumar@linaro.org>",
     description: "Generic CPUFreq DT driver",
     license: "GPL v2",
 }

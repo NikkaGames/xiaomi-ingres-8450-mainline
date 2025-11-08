@@ -332,7 +332,7 @@ static bool has_pmem(void)
 	return has_pmem;
 }
 
-bool tool_pmu__read_event(enum tool_pmu_event ev, struct evsel *evsel, u64 *result)
+bool tool_pmu__read_event(enum tool_pmu_event ev, u64 *result)
 {
 	const struct cpu_topology *topology;
 
@@ -347,60 +347,18 @@ bool tool_pmu__read_event(enum tool_pmu_event ev, struct evsel *evsel, u64 *resu
 		return true;
 
 	case TOOL_PMU__EVENT_NUM_CPUS:
-		if (!evsel || perf_cpu_map__is_empty(evsel->core.cpus)) {
-			/* No evsel to be specific to. */
-			*result = cpu__max_present_cpu().cpu;
-		} else if (!perf_cpu_map__has_any_cpu(evsel->core.cpus)) {
-			/* Evsel just has specific CPUs. */
-			*result = perf_cpu_map__nr(evsel->core.cpus);
-		} else {
-			/*
-			 * "Any CPU" event that can be scheduled on any CPU in
-			 * the PMU's cpumask. The PMU cpumask should be saved in
-			 * pmu_cpus. If not present fall back to max.
-			 */
-			if (!perf_cpu_map__is_empty(evsel->core.pmu_cpus))
-				*result = perf_cpu_map__nr(evsel->core.pmu_cpus);
-			else
-				*result = cpu__max_present_cpu().cpu;
-		}
+		*result = cpu__max_present_cpu().cpu;
 		return true;
 
 	case TOOL_PMU__EVENT_NUM_CPUS_ONLINE: {
 		struct perf_cpu_map *online = cpu_map__online();
 
-		if (!online)
-			return false;
-
-		if (!evsel || perf_cpu_map__is_empty(evsel->core.cpus)) {
-			/* No evsel to be specific to. */
+		if (online) {
 			*result = perf_cpu_map__nr(online);
-		} else if (!perf_cpu_map__has_any_cpu(evsel->core.cpus)) {
-			/* Evsel just has specific CPUs. */
-			struct perf_cpu_map *tmp =
-				perf_cpu_map__intersect(online, evsel->core.cpus);
-
-			*result = perf_cpu_map__nr(tmp);
-			perf_cpu_map__put(tmp);
-		} else {
-			/*
-			 * "Any CPU" event that can be scheduled on any CPU in
-			 * the PMU's cpumask. The PMU cpumask should be saved in
-			 * pmu_cpus, if not present then just the online cpu
-			 * mask.
-			 */
-			if (!perf_cpu_map__is_empty(evsel->core.pmu_cpus)) {
-				struct perf_cpu_map *tmp =
-					perf_cpu_map__intersect(online, evsel->core.pmu_cpus);
-
-				*result = perf_cpu_map__nr(tmp);
-				perf_cpu_map__put(tmp);
-			} else {
-				*result = perf_cpu_map__nr(online);
-			}
+			perf_cpu_map__put(online);
+			return true;
 		}
-		perf_cpu_map__put(online);
-		return true;
+		return false;
 	}
 	case TOOL_PMU__EVENT_NUM_DIES:
 		topology = online_topology();
@@ -459,7 +417,7 @@ int evsel__tool_pmu_read(struct evsel *evsel, int cpu_map_idx, int thread)
 			old_count = perf_counts(evsel->prev_raw_counts, cpu_map_idx, thread);
 		val = 0;
 		if (cpu_map_idx == 0 && thread == 0) {
-			if (!tool_pmu__read_event(ev, evsel, &val)) {
+			if (!tool_pmu__read_event(ev, &val)) {
 				count->lost++;
 				val = 0;
 			}

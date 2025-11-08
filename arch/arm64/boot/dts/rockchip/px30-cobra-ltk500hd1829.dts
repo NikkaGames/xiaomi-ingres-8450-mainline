@@ -16,8 +16,6 @@
 };
 
 &dsi {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	status = "okay";
 
 	panel@0 {

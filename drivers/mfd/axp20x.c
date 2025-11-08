@@ -1053,8 +1053,7 @@ static const struct mfd_cell axp152_cells[] = {
 };
 
 static struct mfd_cell axp313a_cells[] = {
-	/* AXP323 is sometimes paired with AXP717 as sub-PMIC */
-	MFD_CELL_BASIC("axp20x-regulator", NULL, NULL, 0, 1),
+	MFD_CELL_NAME("axp20x-regulator"),
 	MFD_CELL_RES("axp313a-pek", axp313a_pek_resources),
 };
 
@@ -1231,8 +1230,9 @@ static const struct mfd_cell axp15060_cells[] = {
 
 /* For boards that don't have IRQ line connected to SOC. */
 static const struct mfd_cell axp_regulator_only_cells[] = {
-	/* PMIC without IRQ line may be secondary PMIC */
-	MFD_CELL_BASIC("axp20x-regulator", NULL, NULL, 0, 1),
+	{
+		.name		= "axp20x-regulator",
+	},
 };
 
 static int axp20x_power_off(struct sys_off_data *data)

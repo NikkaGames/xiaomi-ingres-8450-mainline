@@ -65,7 +65,6 @@ struct amdgpu_usermode_queue {
 	struct dma_fence	*last_fence;
 	u32			xcp_id;
 	int			priority;
-	struct dentry		*debugfs_queue;
 };
 
 struct amdgpu_userq_funcs {

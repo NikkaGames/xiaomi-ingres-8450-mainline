@@ -117,7 +117,6 @@ static int sev_flush_asids(unsigned int min_asid, unsigned int max_asid)
 	 */
 	down_write(&sev_deactivate_lock);
 
-	/* SNP firmware requires use of WBINVD for ASID recycling. */
 	wbinvd_on_all_cpus();
 
 	if (sev_snp_enabled)
@@ -447,12 +446,7 @@ static int __sev_guest_init(struct kvm *kvm, struct kvm_sev_cmd *argp,
 	init_args.probe = false;
 	ret = sev_platform_init(&init_args);
 	if (ret)
-		goto e_free_asid;
-
-	if (!zalloc_cpumask_var(&sev->have_run_cpus, GFP_KERNEL_ACCOUNT)) {
-		ret = -ENOMEM;
-		goto e_free_asid;
-	}
+		goto e_free;
 
 	/* This needs to happen after SEV/SNP firmware initialization. */
 	if (vm_type == KVM_X86_SNP_VM) {
@@ -470,8 +464,6 @@ static int __sev_guest_init(struct kvm *kvm, struct kvm_sev_cmd *argp,
 	return 0;
 
 e_free:
-	free_cpumask_var(sev->have_run_cpus);
-e_free_asid:
 	argp->error = init_args.error;
 	sev_asid_free(sev);
 	sev->asid = 0;
@@ -714,29 +706,6 @@ static void sev_clflush_pages(struct page *pages[], unsigned long npages)
 		kunmap_local(page_virtual);
 		cond_resched();
 	}
-}
-
-static void sev_writeback_caches(struct kvm *kvm)
-{
-	/*
-	 * Ensure that all dirty guest tagged cache entries are written back
-	 * before releasing the pages back to the system for use.  CLFLUSH will
-	 * not do this without SME_COHERENT, and flushing many cache lines
-	 * individually is slower than blasting WBINVD for large VMs, so issue
-	 * WBNOINVD (or WBINVD if the "no invalidate" variant is unsupported)
-	 * on CPUs that have done VMRUN, i.e. may have dirtied data using the
-	 * VM's ASID.
-	 *
-	 * For simplicity, never remove CPUs from the bitmap.  Ideally, KVM
-	 * would clear the mask when flushing caches, but doing so requires
-	 * serializing multiple calls and having responding CPUs (to the IPI)
-	 * mark themselves as still running if they are running (or about to
-	 * run) a vCPU for the VM.
-	 *
-	 * Note, the caller is responsible for ensuring correctness if the mask
-	 * can be modified, e.g. if a CPU could be doing VMRUN.
-	 */
-	wbnoinvd_on_cpus_mask(to_kvm_sev_info(kvm)->have_run_cpus);
 }
 
 static unsigned long get_num_contig_pages(unsigned long idx,
@@ -2068,17 +2037,6 @@ int sev_vm_move_enc_context_from(struct kvm *kvm, unsigned int source_fd)
 	if (ret)
 		goto out_source_vcpu;
 
-	/*
-	 * Allocate a new have_run_cpus for the destination, i.e. don't copy
-	 * the set of CPUs from the source.  If a CPU was used to run a vCPU in
-	 * the source VM but is never used for the destination VM, then the CPU
-	 * can only have cached memory that was accessible to the source VM.
-	 */
-	if (!zalloc_cpumask_var(&dst_sev->have_run_cpus, GFP_KERNEL_ACCOUNT)) {
-		ret = -ENOMEM;
-		goto out_source_vcpu;
-	}
-
 	sev_migrate_from(kvm, source_kvm);
 	kvm_vm_dead(source_kvm);
 	cg_cleanup_sev = src_sev;
@@ -2177,7 +2135,11 @@ static int snp_launch_start(struct kvm *kvm, struct kvm_sev_cmd *argp)
 		return -EINVAL;
 
 	/* Check for policy bits that must be set */
-	if (!(params.policy & SNP_POLICY_MASK_RSVD_MBO))
+	if (!(params.policy & SNP_POLICY_MASK_RSVD_MBO) ||
+	    !(params.policy & SNP_POLICY_MASK_SMT))
+		return -EINVAL;
+
+	if (params.policy & SNP_POLICY_MASK_SINGLE_SOCKET)
 		return -EINVAL;
 
 	sev->policy = params.policy;
@@ -2736,7 +2698,12 @@ int sev_mem_enc_unregister_region(struct kvm *kvm,
 		goto failed;
 	}
 
-	sev_writeback_caches(kvm);
+	/*
+	 * Ensure that all guest tagged cache entries are flushed before
+	 * releasing the pages back to the system for use. CLFLUSH will
+	 * not do this, so issue a WBINVD.
+	 */
+	wbinvd_on_all_cpus();
 
 	__unregister_enc_region_locked(kvm, region);
 
@@ -2778,18 +2745,13 @@ int sev_vm_copy_enc_context_from(struct kvm *kvm, unsigned int source_fd)
 		goto e_unlock;
 	}
 
-	mirror_sev = to_kvm_sev_info(kvm);
-	if (!zalloc_cpumask_var(&mirror_sev->have_run_cpus, GFP_KERNEL_ACCOUNT)) {
-		ret = -ENOMEM;
-		goto e_unlock;
-	}
-
 	/*
 	 * The mirror kvm holds an enc_context_owner ref so its asid can't
 	 * disappear until we're done with it
 	 */
 	source_sev = to_kvm_sev_info(source_kvm);
 	kvm_get_kvm(source_kvm);
+	mirror_sev = to_kvm_sev_info(kvm);
 	list_add_tail(&mirror_sev->mirror_entry, &source_sev->mirror_vms);
 
 	/* Set enc_context_owner and copy its encryption context over */
@@ -2851,13 +2813,7 @@ void sev_vm_destroy(struct kvm *kvm)
 
 	WARN_ON(!list_empty(&sev->mirror_vms));
 
-	free_cpumask_var(sev->have_run_cpus);
-
-	/*
-	 * If this is a mirror VM, remove it from the owner's list of a mirrors
-	 * and skip ASID cleanup (the ASID is tied to the lifetime of the owner).
-	 * Note, mirror VMs don't support registering encrypted regions.
-	 */
+	/* If this is a mirror_kvm release the enc_context_owner and skip sev cleanup */
 	if (is_mirroring_enc_context(kvm)) {
 		struct kvm *owner_kvm = sev->enc_context_owner;
 
@@ -2868,6 +2824,12 @@ void sev_vm_destroy(struct kvm *kvm)
 		return;
 	}
 
+	/*
+	 * Ensure that all guest tagged cache entries are flushed before
+	 * releasing the pages back to the system for use. CLFLUSH will
+	 * not do this, so issue a WBINVD.
+	 */
+	wbinvd_on_all_cpus();
 
 	/*
 	 * if userspace was terminated before unregistering the memory regions
@@ -3137,29 +3099,30 @@ static void sev_flush_encrypted_page(struct kvm_vcpu *vcpu, void *va)
 
 	/*
 	 * VM Page Flush takes a host virtual address and a guest ASID.  Fall
-	 * back to full writeback of caches if this faults so as not to make
-	 * any problems worse by leaving stale encrypted data in the cache.
+	 * back to WBINVD if this faults so as not to make any problems worse
+	 * by leaving stale encrypted data in the cache.
 	 */
 	if (WARN_ON_ONCE(wrmsrq_safe(MSR_AMD64_VM_PAGE_FLUSH, addr | asid)))
-		goto do_sev_writeback_caches;
+		goto do_wbinvd;
 
 	return;
 
-do_sev_writeback_caches:
-	sev_writeback_caches(vcpu->kvm);
+do_wbinvd:
+	wbinvd_on_all_cpus();
 }
 
 void sev_guest_memory_reclaimed(struct kvm *kvm)
 {
 	/*
 	 * With SNP+gmem, private/encrypted memory is unreachable via the
-	 * hva-based mmu notifiers, i.e. these events are explicitly scoped to
-	 * shared pages, where there's no need to flush caches.
+	 * hva-based mmu notifiers, so these events are only actually
+	 * pertaining to shared pages where there is no need to perform
+	 * the WBINVD to flush associated caches.
 	 */
 	if (!sev_guest(kvm) || sev_snp_guest(kvm))
 		return;
 
-	sev_writeback_caches(kvm);
+	wbinvd_on_all_cpus();
 }
 
 void sev_free_vcpu(struct kvm_vcpu *vcpu)
@@ -3490,15 +3453,6 @@ int pre_sev_run(struct vcpu_svm *svm, int cpu)
 	 */
 	if (sev_es_guest(kvm) && !VALID_PAGE(svm->vmcb->control.vmsa_pa))
 		return -EINVAL;
-
-	/*
-	 * To optimize cache flushes when memory is reclaimed from an SEV VM,
-	 * track physical CPUs that enter the guest for SEV VMs and thus can
-	 * have encrypted, dirty data in the cache, and flush caches only for
-	 * CPUs that have entered the guest.
-	 */
-	if (!cpumask_test_cpu(cpu, to_kvm_sev_info(kvm)->have_run_cpus))
-		cpumask_set_cpu(cpu, to_kvm_sev_info(kvm)->have_run_cpus);
 
 	/* Assign the asid allocated with this SEV guest */
 	svm->asid = asid;
@@ -3932,9 +3886,9 @@ void sev_snp_init_protected_guest_state(struct kvm_vcpu *vcpu)
 	 * From this point forward, the VMSA will always be a guest-mapped page
 	 * rather than the initial one allocated by KVM in svm->sev_es.vmsa. In
 	 * theory, svm->sev_es.vmsa could be free'd and cleaned up here, but
-	 * that involves cleanups like flushing caches, which would ideally be
-	 * handled during teardown rather than guest boot.  Deferring that also
-	 * allows the existing logic for SEV-ES VMSAs to be re-used with
+	 * that involves cleanups like wbinvd_on_all_cpus() which would ideally
+	 * be handled during teardown rather than guest boot.  Deferring that
+	 * also allows the existing logic for SEV-ES VMSAs to be re-used with
 	 * minimal SNP-specific changes.
 	 */
 	svm->sev_es.snp_has_guest_vmsa = true;
@@ -4436,17 +4390,16 @@ int sev_es_string_io(struct vcpu_svm *svm, int size, unsigned int port, int in)
 				    count, in);
 }
 
-void sev_es_recalc_msr_intercepts(struct kvm_vcpu *vcpu)
+static void sev_es_vcpu_after_set_cpuid(struct vcpu_svm *svm)
 {
-	/* Clear intercepts on MSRs that are context switched by hardware. */
-	svm_disable_intercept_for_msr(vcpu, MSR_AMD64_SEV_ES_GHCB, MSR_TYPE_RW);
-	svm_disable_intercept_for_msr(vcpu, MSR_EFER, MSR_TYPE_RW);
-	svm_disable_intercept_for_msr(vcpu, MSR_IA32_CR_PAT, MSR_TYPE_RW);
+	struct kvm_vcpu *vcpu = &svm->vcpu;
 
-	if (boot_cpu_has(X86_FEATURE_V_TSC_AUX))
-		svm_set_intercept_for_msr(vcpu, MSR_TSC_AUX, MSR_TYPE_RW,
-					  !guest_cpu_cap_has(vcpu, X86_FEATURE_RDTSCP) &&
-					  !guest_cpu_cap_has(vcpu, X86_FEATURE_RDPID));
+	if (boot_cpu_has(X86_FEATURE_V_TSC_AUX)) {
+		bool v_tsc_aux = guest_cpu_cap_has(vcpu, X86_FEATURE_RDTSCP) ||
+				 guest_cpu_cap_has(vcpu, X86_FEATURE_RDPID);
+
+		set_msr_interception(vcpu, svm->msrpm, MSR_TSC_AUX, v_tsc_aux, v_tsc_aux);
+	}
 
 	/*
 	 * For SEV-ES, accesses to MSR_IA32_XSS should not be intercepted if
@@ -4460,9 +4413,11 @@ void sev_es_recalc_msr_intercepts(struct kvm_vcpu *vcpu)
 	 * XSAVES being exposed to the guest so that KVM can at least honor
 	 * guest CPUID for RDMSR and WRMSR.
 	 */
-	svm_set_intercept_for_msr(vcpu, MSR_IA32_XSS, MSR_TYPE_RW,
-				  !guest_cpu_cap_has(vcpu, X86_FEATURE_XSAVES) ||
-				  !guest_cpuid_has(vcpu, X86_FEATURE_XSAVES));
+	if (guest_cpu_cap_has(vcpu, X86_FEATURE_XSAVES) &&
+	    guest_cpuid_has(vcpu, X86_FEATURE_XSAVES))
+		set_msr_interception(vcpu, svm->msrpm, MSR_IA32_XSS, 1, 1);
+	else
+		set_msr_interception(vcpu, svm->msrpm, MSR_IA32_XSS, 0, 0);
 }
 
 void sev_vcpu_after_set_cpuid(struct vcpu_svm *svm)
@@ -4474,12 +4429,16 @@ void sev_vcpu_after_set_cpuid(struct vcpu_svm *svm)
 	best = kvm_find_cpuid_entry(vcpu, 0x8000001F);
 	if (best)
 		vcpu->arch.reserved_gpa_bits &= ~(1UL << (best->ebx & 0x3f));
+
+	if (sev_es_guest(svm->vcpu.kvm))
+		sev_es_vcpu_after_set_cpuid(svm);
 }
 
 static void sev_es_init_vmcb(struct vcpu_svm *svm)
 {
 	struct kvm_sev_info *sev = to_kvm_sev_info(svm->vcpu.kvm);
 	struct vmcb *vmcb = svm->vmcb01.ptr;
+	struct kvm_vcpu *vcpu = &svm->vcpu;
 
 	svm->vmcb->control.nested_ctl |= SVM_NESTED_CTL_SEV_ES_ENABLE;
 
@@ -4537,6 +4496,10 @@ static void sev_es_init_vmcb(struct vcpu_svm *svm)
 
 	/* Can't intercept XSETBV, HV can't modify XCR0 directly */
 	svm_clr_intercept(svm, INTERCEPT_XSETBV);
+
+	/* Clear intercepts on selected MSRs */
+	set_msr_interception(vcpu, svm->msrpm, MSR_EFER, 1, 1);
+	set_msr_interception(vcpu, svm->msrpm, MSR_IA32_CR_PAT, 1, 1);
 }
 
 void sev_init_vmcb(struct vcpu_svm *svm)
@@ -4925,7 +4888,7 @@ void sev_gmem_invalidate(kvm_pfn_t start, kvm_pfn_t end)
 
 		/*
 		 * SEV-ES avoids host/guest cache coherency issues through
-		 * WBNOINVD hooks issued via MMU notifiers during run-time, and
+		 * WBINVD hooks issued via MMU notifiers during run-time, and
 		 * KVM's VM destroy path at shutdown. Those MMU notifier events
 		 * don't cover gmem since there is no requirement to map pages
 		 * to a HVA in order to use them for a running guest. While the

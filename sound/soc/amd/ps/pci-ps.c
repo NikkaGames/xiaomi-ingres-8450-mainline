@@ -117,7 +117,6 @@ static short int check_and_handle_sdw_dma_irq(struct acp63_dev_data *adata, u32 
 					break;
 				case ACP70_PCI_REV:
 				case ACP71_PCI_REV:
-				case ACP72_PCI_REV:
 					adata->acp70_sdw0_dma_intr_stat[stream_id] = 1;
 					break;
 				}
@@ -142,7 +141,6 @@ static short int check_and_handle_sdw_dma_irq(struct acp63_dev_data *adata, u32 
 		break;
 	case ACP70_PCI_REV:
 	case ACP71_PCI_REV:
-	case ACP72_PCI_REV:
 		if (ext_intr_stat1 & ACP70_P1_SDW_DMA_IRQ_MASK) {
 			for (index = ACP70_P1_AUDIO2_RX_THRESHOLD;
 			     index <= ACP70_P1_AUDIO0_TX_THRESHOLD; index++) {
@@ -554,7 +552,6 @@ static int acp_hw_init_ops(struct acp63_dev_data *adata, struct pci_dev *pci)
 		break;
 	case ACP70_PCI_REV:
 	case ACP71_PCI_REV:
-	case ACP72_PCI_REV:
 		acp70_hw_init_ops(adata->hw_ops);
 		break;
 	default:
@@ -584,7 +581,6 @@ static int snd_acp63_probe(struct pci_dev *pci,
 	case ACP63_PCI_REV:
 	case ACP70_PCI_REV:
 	case ACP71_PCI_REV:
-	case ACP72_PCI_REV:
 		break;
 	default:
 		dev_dbg(&pci->dev, "acp63/acp70/acp71 pci device not found\n");

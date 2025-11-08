@@ -213,13 +213,17 @@ static int rockchip_hdmi_parse_dt(struct rockchip_hdmi *hdmi)
 
 	if (IS_ERR(hdmi->ref_clk)) {
 		ret = PTR_ERR(hdmi->ref_clk);
-		return dev_err_probe(hdmi->dev, ret, "failed to get reference clock\n");
+		if (ret != -EPROBE_DEFER)
+			dev_err(hdmi->dev, "failed to get reference clock\n");
+		return ret;
 	}
 
 	hdmi->grf_clk = devm_clk_get_optional(hdmi->dev, "grf");
 	if (IS_ERR(hdmi->grf_clk)) {
 		ret = PTR_ERR(hdmi->grf_clk);
-		return dev_err_probe(hdmi->dev, ret, "failed to get grf clock\n");
+		if (ret != -EPROBE_DEFER)
+			dev_err(hdmi->dev, "failed to get grf clock\n");
+		return ret;
 	}
 
 	ret = devm_regulator_get_enable(hdmi->dev, "avdd-0v9");
@@ -569,13 +573,17 @@ static int dw_hdmi_rockchip_bind(struct device *dev, struct device *master,
 
 	ret = rockchip_hdmi_parse_dt(hdmi);
 	if (ret) {
-		return dev_err_probe(hdmi->dev, ret, "Unable to parse OF data\n");
+		if (ret != -EPROBE_DEFER)
+			dev_err(hdmi->dev, "Unable to parse OF data\n");
+		return ret;
 	}
 
 	hdmi->phy = devm_phy_optional_get(dev, "hdmi");
 	if (IS_ERR(hdmi->phy)) {
 		ret = PTR_ERR(hdmi->phy);
-		return dev_err_probe(hdmi->dev, ret, "failed to get phy\n");
+		if (ret != -EPROBE_DEFER)
+			dev_err(hdmi->dev, "failed to get phy\n");
+		return ret;
 	}
 
 	if (hdmi->phy) {

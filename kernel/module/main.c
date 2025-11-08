@@ -126,36 +126,8 @@ static void mod_update_bounds(struct module *mod)
 }
 
 /* Block module loading/unloading? */
-static int modules_disabled;
+int modules_disabled;
 core_param(nomodule, modules_disabled, bint, 0);
-
-static const struct ctl_table module_sysctl_table[] = {
-	{
-		.procname	= "modprobe",
-		.data		= &modprobe_path,
-		.maxlen		= KMOD_PATH_LEN,
-		.mode		= 0644,
-		.proc_handler	= proc_dostring,
-	},
-	{
-		.procname	= "modules_disabled",
-		.data		= &modules_disabled,
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		/* only handle a transition from default "0" to "1" */
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= SYSCTL_ONE,
-		.extra2		= SYSCTL_ONE,
-	},
-};
-
-static int __init init_module_sysctl(void)
-{
-	register_sysctl_init("kernel", module_sysctl_table);
-	return 0;
-}
-
-subsys_initcall(init_module_sysctl);
 
 /* Waiting for a module to finish initializing? */
 static DECLARE_WAIT_QUEUE_HEAD(module_wq);
@@ -608,7 +580,7 @@ MODINFO_ATTR(version);
 MODINFO_ATTR(srcversion);
 
 static struct {
-	char name[MODULE_NAME_LEN];
+	char name[MODULE_NAME_LEN + 1];
 	char taints[MODULE_FLAGS_BUF_SIZE];
 } last_unloaded_module;
 
@@ -779,16 +751,14 @@ SYSCALL_DEFINE2(delete_module, const char __user *, name_user,
 	struct module *mod;
 	char name[MODULE_NAME_LEN];
 	char buf[MODULE_FLAGS_BUF_SIZE];
-	int ret, len, forced = 0;
+	int ret, forced = 0;
 
 	if (!capable(CAP_SYS_MODULE) || modules_disabled)
 		return -EPERM;
 
-	len = strncpy_from_user(name, name_user, MODULE_NAME_LEN);
-	if (len == 0 || len == MODULE_NAME_LEN)
-		return -ENOENT;
-	if (len < 0)
-		return len;
+	if (strncpy_from_user(name, name_user, MODULE_NAME_LEN-1) < 0)
+		return -EFAULT;
+	name[MODULE_NAME_LEN-1] = '\0';
 
 	audit_log_kern_module(name);
 
@@ -1322,11 +1292,20 @@ static int module_memory_alloc(struct module *mod, enum mod_mem_type type)
 	else
 		execmem_type = EXECMEM_MODULE_TEXT;
 
-	ptr = execmem_alloc_rw(execmem_type, size);
+	ptr = execmem_alloc(execmem_type, size);
 	if (!ptr)
 		return -ENOMEM;
 
-	mod->mem[type].is_rox = execmem_is_rox(execmem_type);
+	if (execmem_is_rox(execmem_type)) {
+		int err = execmem_make_temp_rw(ptr, size);
+
+		if (err) {
+			execmem_free(ptr);
+			return -ENOMEM;
+		}
+
+		mod->mem[type].is_rox = true;
+	}
 
 	/*
 	 * The pointer to these blocks of memory are stored on the module
@@ -2666,7 +2645,7 @@ static int find_module_sections(struct module *mod, struct load_info *info)
 					 sizeof(*mod->trace_bprintk_fmt_start),
 					 &mod->num_trace_bprintk_fmt);
 #endif
-#ifdef CONFIG_DYNAMIC_FTRACE
+#ifdef CONFIG_FTRACE_MCOUNT_RECORD
 	/* sechdrs[0].sh_size is always zero */
 	mod->ftrace_callsites = section_objs(info, FTRACE_CALLSITE_SECTION,
 					     sizeof(*mod->ftrace_callsites),
@@ -3394,7 +3373,7 @@ static int load_module(struct load_info *info, const char __user *uargs,
 
 	module_allocated = true;
 
-	audit_log_kern_module(info->name);
+	audit_log_kern_module(mod->name);
 
 	/* Reserve our place in the list. */
 	err = add_unformed_module(mod);
@@ -3558,10 +3537,8 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	 * failures once the proper module was allocated and
 	 * before that.
 	 */
-	if (!module_allocated) {
-		audit_log_kern_module(info->name ? info->name : "?");
+	if (!module_allocated)
 		mod_stat_bump_becoming(info, flags);
-	}
 	free_copy(info, flags);
 	return err;
 }

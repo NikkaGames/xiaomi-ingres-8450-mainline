@@ -183,10 +183,9 @@ static void xgetaddrinfo(const char *node, const char *service,
 			 struct addrinfo *hints,
 			 struct addrinfo **res)
 {
-	int err;
-
 again:
-	err = getaddrinfo(node, service, hints, res);
+	int err = getaddrinfo(node, service, hints, res);
+
 	if (err) {
 		const char *errstr;
 

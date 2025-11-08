@@ -442,8 +442,11 @@ struct caam_drv_ctx *caam_drv_ctx_init(struct device *qidev,
 	if (!cpumask_test_cpu(*cpu, cpus)) {
 		int *pcpu = &get_cpu_var(last_cpu);
 
-		*pcpu = cpumask_next_wrap(*pcpu, cpus);
+		*pcpu = cpumask_next(*pcpu, cpus);
+		if (*pcpu >= nr_cpu_ids)
+			*pcpu = cpumask_first(cpus);
 		*cpu = *pcpu;
+
 		put_cpu_var(last_cpu);
 	}
 	drv_ctx->cpu = *cpu;

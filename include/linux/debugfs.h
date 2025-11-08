@@ -162,7 +162,8 @@ void debugfs_remove(struct dentry *dentry);
 
 void debugfs_lookup_and_remove(const char *name, struct dentry *parent);
 
-void *debugfs_get_aux(const struct file *file);
+const struct file_operations *debugfs_real_fops(const struct file *filp);
+const void *debugfs_get_aux(const struct file *file);
 
 int debugfs_file_get(struct dentry *dentry);
 void debugfs_file_put(struct dentry *dentry);
@@ -328,6 +329,7 @@ static inline void debugfs_lookup_and_remove(const char *name,
 					     struct dentry *parent)
 { }
 
+const struct file_operations *debugfs_real_fops(const struct file *filp);
 void *debugfs_get_aux(const struct file *file);
 
 static inline int debugfs_file_get(struct dentry *dentry)

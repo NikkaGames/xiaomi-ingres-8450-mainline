@@ -22,6 +22,7 @@
  */
 
 #include <linux/device.h>
+#include <linux/export.h>
 #include <linux/err.h>
 #include <linux/fs.h>
 #include <linux/file.h>

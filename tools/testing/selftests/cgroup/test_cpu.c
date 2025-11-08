@@ -2,7 +2,6 @@
 
 #define _GNU_SOURCE
 #include <linux/limits.h>
-#include <sys/param.h>
 #include <sys/sysinfo.h>
 #include <sys/wait.h>
 #include <errno.h>
@@ -646,16 +645,10 @@ test_cpucg_nested_weight_underprovisioned(const char *root)
 static int test_cpucg_max(const char *root)
 {
 	int ret = KSFT_FAIL;
-	long quota_usec = 1000;
-	long default_period_usec = 100000; /* cpu.max's default period */
-	long duration_seconds = 1;
-
-	long duration_usec = duration_seconds * USEC_PER_SEC;
-	long usage_usec, n_periods, remainder_usec, expected_usage_usec;
+	long usage_usec, user_usec;
+	long usage_seconds = 1;
+	long expected_usage_usec = usage_seconds * USEC_PER_SEC;
 	char *cpucg;
-	char quota_buf[32];
-
-	snprintf(quota_buf, sizeof(quota_buf), "%ld", quota_usec);
 
 	cpucg = cg_name(root, "cpucg_test");
 	if (!cpucg)
@@ -664,13 +657,13 @@ static int test_cpucg_max(const char *root)
 	if (cg_create(cpucg))
 		goto cleanup;
 
-	if (cg_write(cpucg, "cpu.max", quota_buf))
+	if (cg_write(cpucg, "cpu.max", "1000"))
 		goto cleanup;
 
 	struct cpu_hog_func_param param = {
 		.nprocs = 1,
 		.ts = {
-			.tv_sec = duration_seconds,
+			.tv_sec = usage_seconds,
 			.tv_nsec = 0,
 		},
 		.clock_type = CPU_HOG_CLOCK_WALL,
@@ -679,19 +672,14 @@ static int test_cpucg_max(const char *root)
 		goto cleanup;
 
 	usage_usec = cg_read_key_long(cpucg, "cpu.stat", "usage_usec");
-	if (usage_usec <= 0)
+	user_usec = cg_read_key_long(cpucg, "cpu.stat", "user_usec");
+	if (user_usec <= 0)
 		goto cleanup;
 
-	/*
-	 * The following calculation applies only since
-	 * the cpu hog is set to run as per wall-clock time
-	 */
-	n_periods = duration_usec / default_period_usec;
-	remainder_usec = duration_usec - n_periods * default_period_usec;
-	expected_usage_usec
-		= n_periods * quota_usec + MIN(remainder_usec, quota_usec);
+	if (user_usec >= expected_usage_usec)
+		goto cleanup;
 
-	if (!values_close(usage_usec, expected_usage_usec, 10))
+	if (values_close(usage_usec, expected_usage_usec, 95))
 		goto cleanup;
 
 	ret = KSFT_PASS;
@@ -710,16 +698,10 @@ cleanup:
 static int test_cpucg_max_nested(const char *root)
 {
 	int ret = KSFT_FAIL;
-	long quota_usec = 1000;
-	long default_period_usec = 100000; /* cpu.max's default period */
-	long duration_seconds = 1;
-
-	long duration_usec = duration_seconds * USEC_PER_SEC;
-	long usage_usec, n_periods, remainder_usec, expected_usage_usec;
+	long usage_usec, user_usec;
+	long usage_seconds = 1;
+	long expected_usage_usec = usage_seconds * USEC_PER_SEC;
 	char *parent, *child;
-	char quota_buf[32];
-
-	snprintf(quota_buf, sizeof(quota_buf), "%ld", quota_usec);
 
 	parent = cg_name(root, "cpucg_parent");
 	child = cg_name(parent, "cpucg_child");
@@ -735,13 +717,13 @@ static int test_cpucg_max_nested(const char *root)
 	if (cg_create(child))
 		goto cleanup;
 
-	if (cg_write(parent, "cpu.max", quota_buf))
+	if (cg_write(parent, "cpu.max", "1000"))
 		goto cleanup;
 
 	struct cpu_hog_func_param param = {
 		.nprocs = 1,
 		.ts = {
-			.tv_sec = duration_seconds,
+			.tv_sec = usage_seconds,
 			.tv_nsec = 0,
 		},
 		.clock_type = CPU_HOG_CLOCK_WALL,
@@ -750,19 +732,14 @@ static int test_cpucg_max_nested(const char *root)
 		goto cleanup;
 
 	usage_usec = cg_read_key_long(child, "cpu.stat", "usage_usec");
-	if (usage_usec <= 0)
+	user_usec = cg_read_key_long(child, "cpu.stat", "user_usec");
+	if (user_usec <= 0)
 		goto cleanup;
 
-	/*
-	 * The following calculation applies only since
-	 * the cpu hog is set to run as per wall-clock time
-	 */
-	n_periods = duration_usec / default_period_usec;
-	remainder_usec = duration_usec - n_periods * default_period_usec;
-	expected_usage_usec
-		= n_periods * quota_usec + MIN(remainder_usec, quota_usec);
+	if (user_usec >= expected_usage_usec)
+		goto cleanup;
 
-	if (!values_close(usage_usec, expected_usage_usec, 10))
+	if (values_close(usage_usec, expected_usage_usec, 95))
 		goto cleanup;
 
 	ret = KSFT_PASS;

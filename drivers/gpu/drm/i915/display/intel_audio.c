@@ -951,7 +951,7 @@ static int glk_force_audio_cdclk_commit(struct intel_atomic_state *state,
 	if (IS_ERR(cdclk_state))
 		return PTR_ERR(cdclk_state);
 
-	intel_cdclk_force_min_cdclk(cdclk_state, enable ? 2 * 96000 : 0);
+	cdclk_state->force_min_cdclk = enable ? 2 * 96000 : 0;
 
 	return drm_atomic_commit(&state->base);
 }

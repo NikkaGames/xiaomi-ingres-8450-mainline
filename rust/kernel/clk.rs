@@ -12,7 +12,7 @@ use crate::ffi::c_ulong;
 ///
 /// Represents a frequency in hertz, wrapping a [`c_ulong`] value.
 ///
-/// # Examples
+/// ## Examples
 ///
 /// ```
 /// use kernel::clk::Hertz;
@@ -30,43 +30,39 @@ use crate::ffi::c_ulong;
 pub struct Hertz(pub c_ulong);
 
 impl Hertz {
-    const KHZ_TO_HZ: c_ulong = 1_000;
-    const MHZ_TO_HZ: c_ulong = 1_000_000;
-    const GHZ_TO_HZ: c_ulong = 1_000_000_000;
-
     /// Create a new instance from kilohertz (kHz)
-    pub const fn from_khz(khz: c_ulong) -> Self {
-        Self(khz * Self::KHZ_TO_HZ)
+    pub fn from_khz(khz: c_ulong) -> Self {
+        Self(khz * 1_000)
     }
 
     /// Create a new instance from megahertz (MHz)
-    pub const fn from_mhz(mhz: c_ulong) -> Self {
-        Self(mhz * Self::MHZ_TO_HZ)
+    pub fn from_mhz(mhz: c_ulong) -> Self {
+        Self(mhz * 1_000_000)
     }
 
     /// Create a new instance from gigahertz (GHz)
-    pub const fn from_ghz(ghz: c_ulong) -> Self {
-        Self(ghz * Self::GHZ_TO_HZ)
+    pub fn from_ghz(ghz: c_ulong) -> Self {
+        Self(ghz * 1_000_000_000)
     }
 
     /// Get the frequency in hertz
-    pub const fn as_hz(&self) -> c_ulong {
+    pub fn as_hz(&self) -> c_ulong {
         self.0
     }
 
     /// Get the frequency in kilohertz
-    pub const fn as_khz(&self) -> c_ulong {
-        self.0 / Self::KHZ_TO_HZ
+    pub fn as_khz(&self) -> c_ulong {
+        self.0 / 1_000
     }
 
     /// Get the frequency in megahertz
-    pub const fn as_mhz(&self) -> c_ulong {
-        self.0 / Self::MHZ_TO_HZ
+    pub fn as_mhz(&self) -> c_ulong {
+        self.0 / 1_000_000
     }
 
     /// Get the frequency in gigahertz
-    pub const fn as_ghz(&self) -> c_ulong {
-        self.0 / Self::GHZ_TO_HZ
+    pub fn as_ghz(&self) -> c_ulong {
+        self.0 / 1_000_000_000
     }
 }
 
@@ -99,7 +95,7 @@ mod common_clk {
     /// Instances of this type are reference-counted. Calling [`Clk::get`] ensures that the
     /// allocation remains valid for the lifetime of the [`Clk`].
     ///
-    /// # Examples
+    /// ## Examples
     ///
     /// The following example demonstrates how to obtain and configure a clock for a device.
     ///
@@ -136,7 +132,11 @@ mod common_clk {
         ///
         /// [`clk_get`]: https://docs.kernel.org/core-api/kernel-api.html#c.clk_get
         pub fn get(dev: &Device, name: Option<&CStr>) -> Result<Self> {
-            let con_id = name.map_or(ptr::null(), |n| n.as_ptr());
+            let con_id = if let Some(name) = name {
+                name.as_ptr()
+            } else {
+                ptr::null()
+            };
 
             // SAFETY: It is safe to call [`clk_get`] for a valid device pointer.
             //
@@ -266,7 +266,7 @@ mod common_clk {
     /// Instances of this type are reference-counted. Calling [`OptionalClk::get`] ensures that the
     /// allocation remains valid for the lifetime of the [`OptionalClk`].
     ///
-    /// # Examples
+    /// ## Examples
     ///
     /// The following example demonstrates how to obtain and configure an optional clock for a
     /// device. The code functions correctly whether or not the clock is available.
@@ -304,7 +304,11 @@ mod common_clk {
         /// [`clk_get_optional`]:
         /// https://docs.kernel.org/core-api/kernel-api.html#c.clk_get_optional
         pub fn get(dev: &Device, name: Option<&CStr>) -> Result<Self> {
-            let con_id = name.map_or(ptr::null(), |n| n.as_ptr());
+            let con_id = if let Some(name) = name {
+                name.as_ptr()
+            } else {
+                ptr::null()
+            };
 
             // SAFETY: It is safe to call [`clk_get_optional`] for a valid device pointer.
             //

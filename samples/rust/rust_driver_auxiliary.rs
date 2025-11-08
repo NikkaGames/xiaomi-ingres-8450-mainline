@@ -5,7 +5,8 @@
 //! To make this driver probe, QEMU must be run with `-device pci-testdev`.
 
 use kernel::{
-    auxiliary, bindings, c_str, device::Core, driver, error::Error, pci, prelude::*, InPlaceModule,
+    auxiliary, bindings, c_str, device::Core, driver, error::Error, pci, prelude::*, str::CStr,
+    InPlaceModule,
 };
 
 use pin_init::PinInit;
@@ -113,7 +114,7 @@ impl InPlaceModule for SampleModule {
 module! {
     type: SampleModule,
     name: "rust_driver_auxiliary",
-    authors: ["Danilo Krummrich"],
+    author: "Danilo Krummrich",
     description: "Rust auxiliary driver",
     license: "GPL v2",
 }

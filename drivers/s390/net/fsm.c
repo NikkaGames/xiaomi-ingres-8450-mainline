@@ -5,7 +5,6 @@
  */
 
 #include "fsm.h"
-#include <linux/export.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/timer.h>

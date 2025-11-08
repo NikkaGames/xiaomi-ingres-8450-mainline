@@ -53,22 +53,21 @@ test_basic() {
   # Generate the annotated output file
   if [ "x${mode}" == "xBasic" ]
   then
-    perf annotate --no-demangle -i "${perfdata}" --stdio --percent-limit 10 2> /dev/null > "${perfout}"
+    perf annotate --no-demangle -i "${perfdata}" --stdio 2> /dev/null > "${perfout}"
   else
-    perf annotate --no-demangle -i - --stdio 2> /dev/null --percent-limit 10 < "${perfdata}" > "${perfout}"
+    perf annotate --no-demangle -i - --stdio 2> /dev/null < "${perfdata}" > "${perfout}"
   fi
 
   # check if it has the target symbol
-  if ! grep -q "${testsym}" "${perfout}"
+  if ! head -250 "${perfout}" | grep -q "${testsym}"
   then
     echo "${mode} annotate [Failed: missing target symbol]"
-    cat "${perfout}"
     err=1
     return
   fi
 
   # check if it has the disassembly lines
-  if ! grep -q "${disasm_regex}" "${perfout}"
+  if ! head -250 "${perfout}" | grep -q "${disasm_regex}"
   then
     echo "${mode} annotate [Failed: missing disasm output from default disassembler]"
     err=1
@@ -93,11 +92,11 @@ test_basic() {
   # check one more with external objdump tool (forced by --objdump option)
   if [ "x${mode}" == "xBasic" ]
   then
-    perf annotate --no-demangle -i "${perfdata}" --percent-limit 10 --objdump=objdump 2> /dev/null > "${perfout}"
+    perf annotate --no-demangle -i "${perfdata}" --objdump=objdump 2> /dev/null > "${perfout}"
   else
-    perf annotate --no-demangle -i - "${testsym}" --percent-limit 10 --objdump=objdump 2> /dev/null < "${perfdata}" > "${perfout}"
+    perf annotate --no-demangle -i - "${testsym}" 2> /dev/null < "${perfdata}" > "${perfout}"
   fi
-  if ! grep -q -m 3 "${disasm_regex}" "${perfout}"
+  if ! head -250 "${perfout}" | grep -q -m 3 "${disasm_regex}"
   then
     echo "${mode} annotate [Failed: missing disasm output from non default disassembler (using --objdump)]"
     err=1

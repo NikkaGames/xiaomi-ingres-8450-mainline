@@ -729,7 +729,9 @@ xfs_rtginode_ensure(
 	if (rtg->rtg_inodes[type])
 		return 0;
 
-	tp = xfs_trans_alloc_empty(rtg_mount(rtg));
+	error = xfs_trans_alloc_empty(rtg_mount(rtg), &tp);
+	if (error)
+		return error;
 	error = xfs_rtginode_load(rtg, type, tp);
 	xfs_trans_cancel(tp);
 
@@ -1303,7 +1305,9 @@ xfs_growfs_rt_prep_groups(
 	if (!mp->m_rtdirip) {
 		struct xfs_trans	*tp;
 
-		tp = xfs_trans_alloc_empty(mp);
+		error = xfs_trans_alloc_empty(mp, &tp);
+		if (error)
+			return error;
 		error = xfs_rtginode_load_parent(tp);
 		xfs_trans_cancel(tp);
 
@@ -1670,7 +1674,10 @@ xfs_rtmount_inodes(
 	struct xfs_rtgroup	*rtg = NULL;
 	int			error;
 
-	tp = xfs_trans_alloc_empty(mp);
+	error = xfs_trans_alloc_empty(mp, &tp);
+	if (error)
+		return error;
+
 	if (xfs_has_rtgroups(mp) && mp->m_sb.sb_rgcount > 0) {
 		error = xfs_rtginode_load_parent(tp);
 		if (error)

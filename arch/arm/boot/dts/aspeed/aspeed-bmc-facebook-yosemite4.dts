@@ -189,11 +189,6 @@
 		reg = <0x22>;
 		gpio-controller;
 		#gpio-cells = <2>;
-		gpio-line-names = "SLOT1_UART_SEL0","SLOT1_UART_SEL1",
-				"SLOT1_UART_SEL2","","","","","",
-				"","","","","","","","",
-				"","","","","","","","",
-				"","","","","","","","";
 	};
 
 	gpio@23 {
@@ -240,11 +235,6 @@
 		reg = <0x22>;
 		gpio-controller;
 		#gpio-cells = <2>;
-		gpio-line-names = "SLOT2_UART_SEL0","SLOT2_UART_SEL1",
-				"SLOT2_UART_SEL2","","","","","",
-				"","","","","","","","",
-				"","","","","","","","",
-				"","","","","","","","";
 	};
 
 	gpio@23 {
@@ -291,11 +281,6 @@
 		reg = <0x22>;
 		gpio-controller;
 		#gpio-cells = <2>;
-		gpio-line-names = "SLOT3_UART_SEL0","SLOT3_UART_SEL1",
-				"SLOT3_UART_SEL2","","","","","",
-				"","","","","","","","",
-				"","","","","","","","",
-				"","","","","","","","";
 	};
 
 	gpio@23 {
@@ -342,11 +327,6 @@
 		reg = <0x22>;
 		gpio-controller;
 		#gpio-cells = <2>;
-		gpio-line-names = "SLOT4_UART_SEL0","SLOT4_UART_SEL1",
-				"SLOT4_UART_SEL2","","","","","",
-				"","","","","","","","",
-				"","","","","","","","",
-				"","","","","","","","";
 	};
 
 	gpio@23 {
@@ -393,11 +373,6 @@
 		reg = <0x22>;
 		gpio-controller;
 		#gpio-cells = <2>;
-		gpio-line-names = "SLOT5_UART_SEL0","SLOT5_UART_SEL1",
-				"SLOT5_UART_SEL2","","","","","",
-				"","","","","","","","",
-				"","","","","","","","",
-				"","","","","","","","";
 	};
 
 	gpio@23 {
@@ -444,11 +419,6 @@
 		reg = <0x22>;
 		gpio-controller;
 		#gpio-cells = <2>;
-		gpio-line-names = "SLOT6_UART_SEL0","SLOT6_UART_SEL1",
-				"SLOT6_UART_SEL2","","","","","",
-				"","","","","","","","",
-				"","","","","","","","",
-				"","","","","","","","";
 	};
 
 	gpio@23 {
@@ -495,11 +465,6 @@
 		reg = <0x22>;
 		gpio-controller;
 		#gpio-cells = <2>;
-		gpio-line-names = "SLOT7_UART_SEL0","SLOT7_UART_SEL1",
-				"SLOT7_UART_SEL2","","","","","",
-				"","","","","","","","",
-				"","","","","","","","",
-				"","","","","","","","";
 	};
 
 	gpio@23 {
@@ -546,11 +511,6 @@
 		reg = <0x22>;
 		gpio-controller;
 		#gpio-cells = <2>;
-		gpio-line-names = "SLOT8_UART_SEL0","SLOT8_UART_SEL1",
-				"SLOT8_UART_SEL2","","","","","",
-				"","","","","","","","",
-				"","","","","","","","",
-				"","","","","","","","";
 	};
 
 	gpio@23 {

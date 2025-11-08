@@ -23,7 +23,6 @@
 #include "xe_map.h"
 #include "xe_mmio.h"
 #include "xe_pm.h"
-#include "xe_tile.h"
 
 /*
  * GSC proxy:
@@ -484,7 +483,7 @@ int xe_gsc_proxy_init(struct xe_gsc *gsc)
 	}
 
 	/* no multi-tile devices with this feature yet */
-	if (!xe_tile_is_root(tile)) {
+	if (tile->id > 0) {
 		xe_gt_err(gt, "unexpected GSC proxy init on tile %u\n", tile->id);
 		return -EINVAL;
 	}

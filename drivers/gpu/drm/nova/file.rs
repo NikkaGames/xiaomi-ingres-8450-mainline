@@ -39,8 +39,7 @@ impl File {
             _ => return Err(EINVAL),
         };
 
-        #[allow(clippy::useless_conversion)]
-        getparam.set_value(value.into());
+        getparam.set_value(value);
 
         Ok(0)
     }

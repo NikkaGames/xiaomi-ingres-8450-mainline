@@ -914,11 +914,12 @@ static int aw88081_profile_info(struct snd_kcontrol *kcontrol,
 
 	ret = aw88081_dev_get_prof_name(aw88081->aw_pa, count, &prof_name);
 	if (ret) {
-		strscpy(uinfo->value.enumerated.name, "null");
+		strscpy(uinfo->value.enumerated.name, "null",
+						sizeof(uinfo->value.enumerated.name));
 		return 0;
 	}
 
-	strscpy(uinfo->value.enumerated.name, prof_name);
+	strscpy(uinfo->value.enumerated.name, prof_name, sizeof(uinfo->value.enumerated.name));
 
 	return 0;
 }

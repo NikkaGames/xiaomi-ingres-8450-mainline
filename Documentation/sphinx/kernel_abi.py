@@ -146,10 +146,8 @@ class KernelCmd(Directive):
                 n += 1
 
             if f != old_f:
-                # Add the file to Sphinx build dependencies if the file exists
-                fname = os.path.join(srctree, f)
-                if os.path.isfile(fname):
-                    env.note_dependency(fname)
+                # Add the file to Sphinx build dependencies
+                env.note_dependency(os.path.abspath(f))
 
                 old_f = f
 

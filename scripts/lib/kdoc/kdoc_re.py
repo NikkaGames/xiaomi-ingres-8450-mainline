@@ -29,9 +29,12 @@ class KernRe:
         """
         Adds a new regex or re-use it from the cache.
         """
-        self.regex = re_cache.get(string, None)
-        if not self.regex:
+
+        if string in re_cache:
+            self.regex = re_cache[string]
+        else:
             self.regex = re.compile(string, flags=flags)
+
             if self.cache:
                 re_cache[string] = self.regex
 

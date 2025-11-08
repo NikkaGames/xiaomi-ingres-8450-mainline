@@ -2,8 +2,6 @@
 
 #include <uapi/linux/sched/types.h>
 
-#include <linux/export.h>
-
 #include <drm/drm_print.h>
 #include <drm/drm_vblank.h>
 #include <drm/drm_vblank_work.h>

@@ -6,7 +6,6 @@
 
 #include <linux/init.h>
 #include <linux/slab.h>
-#include <linux/string.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/hrtimer.h>
@@ -139,7 +138,7 @@ static int __init snd_hrtimer_init(void)
 		return err;
 
 	timer->module = THIS_MODULE;
-	strscpy(timer->name, "HR timer");
+	strcpy(timer->name, "HR timer");
 	timer->hw = hrtimer_hw;
 	timer->hw.resolution = resolution;
 	timer->hw.ticks = NANO_SEC / resolution;

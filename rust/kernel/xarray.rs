@@ -7,10 +7,9 @@
 use crate::{
     alloc, bindings, build_assert,
     error::{Error, Result},
-    ffi::c_void,
     types::{ForeignOwnable, NotThreadSafe, Opaque},
 };
-use core::{iter, marker::PhantomData, pin::Pin, ptr::NonNull};
+use core::{iter, marker::PhantomData, mem, pin::Pin, ptr::NonNull};
 use pin_init::{pin_data, pin_init, pinned_drop, PinInit};
 
 /// An array which efficiently maps sparse integer indices to owned objects.
@@ -102,7 +101,7 @@ impl<T: ForeignOwnable> XArray<T> {
         })
     }
 
-    fn iter(&self) -> impl Iterator<Item = NonNull<c_void>> + '_ {
+    fn iter(&self) -> impl Iterator<Item = NonNull<T::PointedTo>> + '_ {
         let mut index = 0;
 
         // SAFETY: `self.xa` is always valid by the type invariant.
@@ -180,7 +179,7 @@ impl<T> From<StoreError<T>> for Error {
 impl<'a, T: ForeignOwnable> Guard<'a, T> {
     fn load<F, U>(&self, index: usize, f: F) -> Option<U>
     where
-        F: FnOnce(NonNull<c_void>) -> U,
+        F: FnOnce(NonNull<T::PointedTo>) -> U,
     {
         // SAFETY: `self.xa.xa` is always valid by the type invariant.
         let ptr = unsafe { bindings::xa_load(self.xa.xa.get(), index) };
@@ -231,7 +230,7 @@ impl<'a, T: ForeignOwnable> Guard<'a, T> {
         gfp: alloc::Flags,
     ) -> Result<Option<T>, StoreError<T>> {
         build_assert!(
-            T::FOREIGN_ALIGN >= 4,
+            mem::align_of::<T::PointedTo>() >= 4,
             "pointers stored in XArray must be 4-byte aligned"
         );
         let new = value.into_foreign();

@@ -856,6 +856,12 @@ static void handle_privileged_root(struct linux_binprm *bprm, bool has_fcap,
 #define __cap_full(field, cred) \
 	cap_issubset(CAP_FULL_SET, cred->cap_##field)
 
+static inline bool __is_setuid(struct cred *new, const struct cred *old)
+{ return !uid_eq(new->euid, old->uid); }
+
+static inline bool __is_setgid(struct cred *new, const struct cred *old)
+{ return !gid_eq(new->egid, old->gid); }
+
 /*
  * 1) Audit candidate if current->cap_effective is set
  *
@@ -885,7 +891,7 @@ static inline bool nonroot_raised_pE(struct cred *new, const struct cred *old,
 	    (root_privileged() &&
 	     __is_suid(root, new) &&
 	     !__cap_full(effective, new)) ||
-	    (uid_eq(new->euid, old->euid) &&
+	    (!__is_setuid(new, old) &&
 	     ((has_fcap &&
 	       __cap_gained(permitted, new, old)) ||
 	      __cap_gained(ambient, new, old))))
@@ -911,7 +917,7 @@ int cap_bprm_creds_from_file(struct linux_binprm *bprm, const struct file *file)
 	/* Process setpcap binaries and capabilities for uid 0 */
 	const struct cred *old = current_cred();
 	struct cred *new = bprm->cred;
-	bool effective = false, has_fcap = false, id_changed;
+	bool effective = false, has_fcap = false, is_setid;
 	int ret;
 	kuid_t root_uid;
 
@@ -935,9 +941,9 @@ int cap_bprm_creds_from_file(struct linux_binprm *bprm, const struct file *file)
 	 *
 	 * In addition, if NO_NEW_PRIVS, then ensure we get no new privs.
 	 */
-	id_changed = !uid_eq(new->euid, old->euid) || !in_group_p(new->egid);
+	is_setid = __is_setuid(new, old) || __is_setgid(new, old);
 
-	if ((id_changed || __cap_gained(permitted, new, old)) &&
+	if ((is_setid || __cap_gained(permitted, new, old)) &&
 	    ((bprm->unsafe & ~LSM_UNSAFE_PTRACE) ||
 	     !ptracer_capable(current, new->user_ns))) {
 		/* downgrade; they get no more than they had, and maybe less */
@@ -954,7 +960,7 @@ int cap_bprm_creds_from_file(struct linux_binprm *bprm, const struct file *file)
 	new->sgid = new->fsgid = new->egid;
 
 	/* File caps or setid cancels ambient. */
-	if (has_fcap || id_changed)
+	if (has_fcap || is_setid)
 		cap_clear(new->cap_ambient);
 
 	/*
@@ -987,9 +993,7 @@ int cap_bprm_creds_from_file(struct linux_binprm *bprm, const struct file *file)
 		return -EPERM;
 
 	/* Check for privilege-elevated exec. */
-	if (id_changed ||
-	    !uid_eq(new->euid, old->uid) ||
-	    !gid_eq(new->egid, old->gid) ||
+	if (is_setid ||
 	    (!__is_real(root_uid, new) &&
 	     (effective ||
 	      __cap_grew(permitted, ambient, new))))

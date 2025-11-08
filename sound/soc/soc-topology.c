@@ -429,11 +429,8 @@ static void soc_tplg_remove_link(struct snd_soc_component *comp,
 		dobj->unload(comp, dobj);
 
 	list_del(&dobj->list);
-
-	/* Ignored links do not need to be removed, they are not added */
-	if (!link->ignore)
-		snd_soc_remove_pcm_runtime(comp->card,
-				snd_soc_get_pcm_runtime(comp->card, link));
+	snd_soc_remove_pcm_runtime(comp->card,
+			snd_soc_get_pcm_runtime(comp->card, link));
 }
 
 /* unload dai link */

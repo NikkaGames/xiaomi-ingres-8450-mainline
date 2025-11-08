@@ -492,9 +492,21 @@ static __always_inline int num_node_state(enum node_states state)
 static __always_inline int node_random(const nodemask_t *maskp)
 {
 #if defined(CONFIG_NUMA) && (MAX_NUMNODES > 1)
-	int node = find_random_bit(maskp->bits, MAX_NUMNODES);
+	int w, bit;
 
-	return node < MAX_NUMNODES ? node : NUMA_NO_NODE;
+	w = nodes_weight(*maskp);
+	switch (w) {
+	case 0:
+		bit = NUMA_NO_NODE;
+		break;
+	case 1:
+		bit = first_node(*maskp);
+		break;
+	default:
+		bit = find_nth_bit(maskp->bits, MAX_NUMNODES, get_random_u32_below(w));
+		break;
+	}
+	return bit;
 #else
 	return 0;
 #endif

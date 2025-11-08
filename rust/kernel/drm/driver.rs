@@ -5,7 +5,9 @@
 //! C header: [`include/linux/drm/drm_drv.h`](srctree/include/linux/drm/drm_drv.h)
 
 use crate::{
-    bindings, device, devres, drm,
+    bindings, device,
+    devres::Devres,
+    drm,
     error::{to_result, Result},
     prelude::*,
     types::ARef,
@@ -127,22 +129,18 @@ impl<T: Driver> Registration<T> {
     }
 
     /// Same as [`Registration::new`}, but transfers ownership of the [`Registration`] to
-    /// [`devres::register`].
+    /// [`Devres`].
     pub fn new_foreign_owned(
         drm: &drm::Device<T>,
         dev: &device::Device<device::Bound>,
         flags: usize,
-    ) -> Result
-    where
-        T: 'static,
-    {
+    ) -> Result {
         if drm.as_ref().as_raw() != dev.as_raw() {
             return Err(EINVAL);
         }
 
         let reg = Registration::<T>::new(drm, flags)?;
-
-        devres::register(dev, reg, GFP_KERNEL)
+        Devres::new_foreign_owned(dev, reg, GFP_KERNEL)
     }
 
     /// Returns a reference to the `Device` instance for this registration.

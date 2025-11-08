@@ -646,24 +646,19 @@ static unsigned long rv3032_clkout_recalc_rate(struct clk_hw *hw,
 	return clkout_xtal_rates[FIELD_GET(RV3032_CLKOUT2_FD_MSK, clkout)];
 }
 
-static int rv3032_clkout_determine_rate(struct clk_hw *hw,
-					struct clk_rate_request *req)
+static long rv3032_clkout_round_rate(struct clk_hw *hw, unsigned long rate,
+				     unsigned long *prate)
 {
 	int i, hfd;
 
-	if (req->rate < RV3032_HFD_STEP)
+	if (rate < RV3032_HFD_STEP)
 		for (i = 0; i < ARRAY_SIZE(clkout_xtal_rates); i++)
-			if (clkout_xtal_rates[i] <= req->rate) {
-				req->rate = clkout_xtal_rates[i];
+			if (clkout_xtal_rates[i] <= rate)
+				return clkout_xtal_rates[i];
 
-				return 0;
-			}
+	hfd = DIV_ROUND_CLOSEST(rate, RV3032_HFD_STEP);
 
-	hfd = DIV_ROUND_CLOSEST(req->rate, RV3032_HFD_STEP);
-
-	req->rate = RV3032_HFD_STEP * clamp(hfd, 0, 8192);
-
-	return 0;
+	return RV3032_HFD_STEP * clamp(hfd, 0, 8192);
 }
 
 static int rv3032_clkout_set_rate(struct clk_hw *hw, unsigned long rate,
@@ -743,7 +738,7 @@ static const struct clk_ops rv3032_clkout_ops = {
 	.unprepare = rv3032_clkout_unprepare,
 	.is_prepared = rv3032_clkout_is_prepared,
 	.recalc_rate = rv3032_clkout_recalc_rate,
-	.determine_rate = rv3032_clkout_determine_rate,
+	.round_rate = rv3032_clkout_round_rate,
 	.set_rate = rv3032_clkout_set_rate,
 };
 

@@ -19,7 +19,6 @@ powerpc
     elf_hwcaps
     elfnote
     firmware-assisted-dump
-    htm
     hvcs
     imc
     isa-versions

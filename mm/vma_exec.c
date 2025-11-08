@@ -54,7 +54,7 @@ int relocate_vma_down(struct vm_area_struct *vma, unsigned long shift)
 	/*
 	 * cover the whole range: [new_start, old_end)
 	 */
-	vmg.target = vma;
+	vmg.middle = vma;
 	if (vma_expand(&vmg))
 		return -ENOMEM;
 

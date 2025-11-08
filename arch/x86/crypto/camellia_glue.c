@@ -10,7 +10,6 @@
 
 #include <linux/unaligned.h>
 #include <linux/crypto.h>
-#include <linux/export.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/types.h>

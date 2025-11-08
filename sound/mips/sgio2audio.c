@@ -16,7 +16,6 @@
 #include <linux/platform_device.h>
 #include <linux/io.h>
 #include <linux/slab.h>
-#include <linux/string.h>
 #include <linux/module.h>
 
 #include <asm/ip32/ip32_ints.h>
@@ -686,7 +685,7 @@ static int snd_sgio2audio_new_pcm(struct snd_sgio2audio *chip)
 		return err;
 
 	pcm->private_data = chip;
-	strscpy(pcm->name, "SGI O2 DAC1");
+	strcpy(pcm->name, "SGI O2 DAC1");
 
 	/* set operators */
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK,
@@ -701,7 +700,7 @@ static int snd_sgio2audio_new_pcm(struct snd_sgio2audio *chip)
 		return err;
 
 	pcm->private_data = chip;
-	strscpy(pcm->name, "SGI O2 DAC2");
+	strcpy(pcm->name, "SGI O2 DAC2");
 
 	/* set operators */
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK,
@@ -893,8 +892,8 @@ static int snd_sgio2audio_probe(struct platform_device *pdev)
 		return err;
 	}
 
-	strscpy(card->driver, "SGI O2 Audio");
-	strscpy(card->shortname, "SGI O2 Audio");
+	strcpy(card->driver, "SGI O2 Audio");
+	strcpy(card->shortname, "SGI O2 Audio");
 	sprintf(card->longname, "%s irq %i-%i",
 		card->shortname,
 		MACEISA_AUDIO1_DMAT_IRQ,

@@ -14,4 +14,3 @@ access monitoring and access-aware system operations.
    usage
    reclaim
    lru_sort
-   stat

@@ -292,8 +292,8 @@ int __kprobes kprobe_fault_handler(struct pt_regs *regs, unsigned int fsr)
 	return 0;
 }
 
-int __kprobes
-kprobe_brk_handler(struct pt_regs *regs, unsigned long esr)
+static int __kprobes
+kprobe_breakpoint_handler(struct pt_regs *regs, unsigned long esr)
 {
 	struct kprobe *p, *cur_kprobe;
 	struct kprobe_ctlblk *kcb;
@@ -336,8 +336,13 @@ kprobe_brk_handler(struct pt_regs *regs, unsigned long esr)
 	return DBG_HOOK_HANDLED;
 }
 
-int __kprobes
-kprobe_ss_brk_handler(struct pt_regs *regs, unsigned long esr)
+static struct break_hook kprobes_break_hook = {
+	.imm = KPROBES_BRK_IMM,
+	.fn = kprobe_breakpoint_handler,
+};
+
+static int __kprobes
+kprobe_breakpoint_ss_handler(struct pt_regs *regs, unsigned long esr)
 {
 	struct kprobe_ctlblk *kcb = get_kprobe_ctlblk();
 	unsigned long addr = instruction_pointer(regs);
@@ -355,8 +360,13 @@ kprobe_ss_brk_handler(struct pt_regs *regs, unsigned long esr)
 	return DBG_HOOK_ERROR;
 }
 
-int __kprobes
-kretprobe_brk_handler(struct pt_regs *regs, unsigned long esr)
+static struct break_hook kprobes_break_ss_hook = {
+	.imm = KPROBES_BRK_SS_IMM,
+	.fn = kprobe_breakpoint_ss_handler,
+};
+
+static int __kprobes
+kretprobe_breakpoint_handler(struct pt_regs *regs, unsigned long esr)
 {
 	if (regs->pc != (unsigned long)__kretprobe_trampoline)
 		return DBG_HOOK_ERROR;
@@ -364,6 +374,11 @@ kretprobe_brk_handler(struct pt_regs *regs, unsigned long esr)
 	regs->pc = kretprobe_trampoline_handler(regs, (void *)regs->regs[29]);
 	return DBG_HOOK_HANDLED;
 }
+
+static struct break_hook kretprobes_break_hook = {
+	.imm = KRETPROBES_BRK_IMM,
+	.fn = kretprobe_breakpoint_handler,
+};
 
 /*
  * Provide a blacklist of symbols identifying ranges which cannot be kprobed.
@@ -407,5 +422,9 @@ int __kprobes arch_trampoline_kprobe(struct kprobe *p)
 
 int __init arch_init_kprobes(void)
 {
+	register_kernel_break_hook(&kprobes_break_hook);
+	register_kernel_break_hook(&kprobes_break_ss_hook);
+	register_kernel_break_hook(&kretprobes_break_hook);
+
 	return 0;
 }

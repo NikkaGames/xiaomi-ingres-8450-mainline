@@ -306,7 +306,7 @@ static void gpio_la_poll_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id gpio_la_poll_of_match[] = {
-	{ .compatible = "gpio-sloppy-logic-analyzer" },
+	{ .compatible = GPIO_LA_NAME },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, gpio_la_poll_of_match);

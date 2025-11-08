@@ -483,9 +483,9 @@ static int afs_fill_super(struct super_block *sb, struct afs_fs_context *ctx)
 		goto error;
 
 	if (as->dyn_root) {
-		set_default_d_op(sb, &afs_dynroot_dentry_operations);
+		sb->s_d_op = &afs_dynroot_dentry_operations;
 	} else {
-		set_default_d_op(sb, &afs_fs_dentry_operations);
+		sb->s_d_op = &afs_fs_dentry_operations;
 		rcu_assign_pointer(as->volume->sb, sb);
 	}
 

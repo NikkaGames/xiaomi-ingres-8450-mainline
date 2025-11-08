@@ -451,10 +451,10 @@ int sdw_slave_read_prop(struct sdw_slave *slave)
 			"mipi-sdw-highPHY-capable");
 
 	prop->paging_support = mipi_device_property_read_bool(dev,
-			"mipi-sdw-paging-supported");
+			"mipi-sdw-paging-support");
 
 	prop->bank_delay_support = mipi_device_property_read_bool(dev,
-			"mipi-sdw-bank-delay-supported");
+			"mipi-sdw-bank-delay-support");
 
 	device_property_read_u32(dev,
 			"mipi-sdw-port15-read-behavior", &prop->p15_behave);

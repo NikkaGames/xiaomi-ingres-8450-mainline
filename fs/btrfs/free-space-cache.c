@@ -366,7 +366,7 @@ fail:
 static void readahead_cache(struct inode *inode)
 {
 	struct file_ra_state ra;
-	pgoff_t last_index;
+	unsigned long last_index;
 
 	file_ra_state_init(&ra, inode->i_mapping);
 	last_index = (i_size_read(inode) - 1) >> PAGE_SHIFT;
@@ -3192,7 +3192,7 @@ static u64 btrfs_alloc_from_bitmap(struct btrfs_block_group *block_group,
 				   u64 *max_extent_size)
 {
 	struct btrfs_free_space_ctl *ctl = block_group->free_space_ctl;
-	int ret2;
+	int err;
 	u64 search_start = cluster->window_start;
 	u64 search_bytes = bytes;
 	u64 ret = 0;
@@ -3200,8 +3200,8 @@ static u64 btrfs_alloc_from_bitmap(struct btrfs_block_group *block_group,
 	search_start = min_start;
 	search_bytes = bytes;
 
-	ret2 = search_bitmap(ctl, entry, &search_start, &search_bytes, true);
-	if (ret2) {
+	err = search_bitmap(ctl, entry, &search_start, &search_bytes, true);
+	if (err) {
 		*max_extent_size = max(get_max_extent_size(entry),
 				       *max_extent_size);
 		return 0;

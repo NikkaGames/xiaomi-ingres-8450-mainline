@@ -221,11 +221,6 @@ enum devlink_port_flavour {
 				      */
 };
 
-/* IEEE 802.1Qaz standard supported values. */
-
-#define DEVLINK_RATE_TCS_MAX 8
-#define DEVLINK_RATE_TC_INDEX_MAX (DEVLINK_RATE_TCS_MAX - 1)
-
 enum devlink_rate_type {
 	DEVLINK_RATE_TYPE_LEAF,
 	DEVLINK_RATE_TYPE_NODE,
@@ -634,8 +629,6 @@ enum devlink_attr {
 
 	DEVLINK_ATTR_REGION_DIRECT,		/* flag */
 
-	DEVLINK_ATTR_RATE_TC_BWS,		/* nested */
-
 	/* Add new attributes above here, update the spec in
 	 * Documentation/netlink/specs/devlink.yaml and re-generate
 	 * net/devlink/netlink_gen.c.
@@ -643,15 +636,6 @@ enum devlink_attr {
 
 	__DEVLINK_ATTR_MAX,
 	DEVLINK_ATTR_MAX = __DEVLINK_ATTR_MAX - 1
-};
-
-enum devlink_rate_tc_attr {
-	DEVLINK_RATE_TC_ATTR_UNSPEC,
-	DEVLINK_RATE_TC_ATTR_INDEX,		/* u8 */
-	DEVLINK_RATE_TC_ATTR_BW,		/* u32 */
-
-	__DEVLINK_RATE_TC_ATTR_MAX,
-	DEVLINK_RATE_TC_ATTR_MAX = __DEVLINK_RATE_TC_ATTR_MAX - 1
 };
 
 /* Mapping between internal resource described by the field and system

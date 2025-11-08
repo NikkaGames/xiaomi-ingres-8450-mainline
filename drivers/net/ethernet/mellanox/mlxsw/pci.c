@@ -156,7 +156,7 @@ static int mlxsw_pci_napi_devs_init(struct mlxsw_pci *mlxsw_pci)
 	}
 	strscpy(mlxsw_pci->napi_dev_rx->name, "mlxsw_rx",
 		sizeof(mlxsw_pci->napi_dev_rx->name));
-	netif_threaded_enable(mlxsw_pci->napi_dev_rx);
+	dev_set_threaded(mlxsw_pci->napi_dev_rx, true);
 
 	return 0;
 

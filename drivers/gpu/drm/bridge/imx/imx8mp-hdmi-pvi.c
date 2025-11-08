@@ -140,10 +140,9 @@ static int imx8mp_hdmi_pvi_probe(struct platform_device *pdev)
 	struct device_node *remote;
 	struct imx8mp_hdmi_pvi *pvi;
 
-	pvi = devm_drm_bridge_alloc(&pdev->dev, struct imx8mp_hdmi_pvi,
-				    bridge, &imx_hdmi_pvi_bridge_funcs);
-	if (IS_ERR(pvi))
-		return PTR_ERR(pvi);
+	pvi = devm_kzalloc(&pdev->dev, sizeof(*pvi), GFP_KERNEL);
+	if (!pvi)
+		return -ENOMEM;
 
 	platform_set_drvdata(pdev, pvi);
 	pvi->dev = &pdev->dev;
@@ -167,6 +166,7 @@ static int imx8mp_hdmi_pvi_probe(struct platform_device *pdev)
 	pm_runtime_enable(&pdev->dev);
 
 	/* Register the bridge. */
+	pvi->bridge.funcs = &imx_hdmi_pvi_bridge_funcs;
 	pvi->bridge.of_node = pdev->dev.of_node;
 	pvi->bridge.timings = pvi->next_bridge->timings;
 

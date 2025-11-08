@@ -245,7 +245,7 @@ static int btrfs_check_ioctl_vol_args2_subvol_name(const struct btrfs_ioctl_vol_
  * Set flags/xflags from the internal inode flags. The remaining items of
  * fsxattr are zeroed.
  */
-int btrfs_fileattr_get(struct dentry *dentry, struct file_kattr *fa)
+int btrfs_fileattr_get(struct dentry *dentry, struct fileattr *fa)
 {
 	const struct btrfs_inode *inode = BTRFS_I(d_inode(dentry));
 
@@ -254,7 +254,7 @@ int btrfs_fileattr_get(struct dentry *dentry, struct file_kattr *fa)
 }
 
 int btrfs_fileattr_set(struct mnt_idmap *idmap,
-		       struct dentry *dentry, struct file_kattr *fa)
+		       struct dentry *dentry, struct fileattr *fa)
 {
 	struct btrfs_inode *inode = BTRFS_I(d_inode(dentry));
 	struct btrfs_root *root = inode->root;
@@ -841,7 +841,7 @@ free_pending:
 static int btrfs_may_delete(struct mnt_idmap *idmap,
 			    struct inode *dir, struct dentry *victim, int isdir)
 {
-	int ret;
+	int error;
 
 	if (d_really_is_negative(victim))
 		return -ENOENT;
@@ -851,9 +851,9 @@ static int btrfs_may_delete(struct mnt_idmap *idmap,
 		return -EINVAL;
 	audit_inode_child(dir, victim, AUDIT_TYPE_CHILD_DELETE);
 
-	ret = inode_permission(idmap, dir, MAY_WRITE | MAY_EXEC);
-	if (ret)
-		return ret;
+	error = inode_permission(idmap, dir, MAY_WRITE | MAY_EXEC);
+	if (error)
+		return error;
 	if (IS_APPEND(dir))
 		return -EPERM;
 	if (check_sticky(idmap, dir, d_inode(victim)) ||
@@ -892,37 +892,39 @@ static inline int btrfs_may_create(struct mnt_idmap *idmap,
  * sys_mkdirat and vfs_mkdir, but we only do a single component lookup
  * inside this filesystem so it's quite a bit simpler.
  */
-static noinline int btrfs_mksubvol(struct dentry *parent,
+static noinline int btrfs_mksubvol(const struct path *parent,
 				   struct mnt_idmap *idmap,
-				   struct qstr *qname, struct btrfs_root *snap_src,
+				   const char *name, int namelen,
+				   struct btrfs_root *snap_src,
 				   bool readonly,
 				   struct btrfs_qgroup_inherit *inherit)
 {
-	struct inode *dir = d_inode(parent);
+	struct inode *dir = d_inode(parent->dentry);
 	struct btrfs_fs_info *fs_info = inode_to_fs_info(dir);
 	struct dentry *dentry;
-	struct fscrypt_str name_str = FSTR_INIT((char *)qname->name, qname->len);
-	int ret;
+	struct fscrypt_str name_str = FSTR_INIT((char *)name, namelen);
+	int error;
 
-	ret = down_write_killable_nested(&dir->i_rwsem, I_MUTEX_PARENT);
-	if (ret == -EINTR)
-		return ret;
+	error = down_write_killable_nested(&dir->i_rwsem, I_MUTEX_PARENT);
+	if (error == -EINTR)
+		return error;
 
-	dentry = lookup_one(idmap, qname, parent);
-	ret = PTR_ERR(dentry);
+	dentry = lookup_one(idmap, &QSTR_LEN(name, namelen), parent->dentry);
+	error = PTR_ERR(dentry);
 	if (IS_ERR(dentry))
 		goto out_unlock;
 
-	ret = btrfs_may_create(idmap, dir, dentry);
-	if (ret)
+	error = btrfs_may_create(idmap, dir, dentry);
+	if (error)
 		goto out_dput;
 
 	/*
 	 * even if this name doesn't exist, we may get hash collisions.
 	 * check for them now when we can safely fail
 	 */
-	ret = btrfs_check_dir_item_collision(BTRFS_I(dir)->root, dir->i_ino, &name_str);
-	if (ret)
+	error = btrfs_check_dir_item_collision(BTRFS_I(dir)->root,
+					       dir->i_ino, &name_str);
+	if (error)
 		goto out_dput;
 
 	down_read(&fs_info->subvol_sem);
@@ -931,11 +933,11 @@ static noinline int btrfs_mksubvol(struct dentry *parent,
 		goto out_up_read;
 
 	if (snap_src)
-		ret = create_snapshot(snap_src, dir, dentry, readonly, inherit);
+		error = create_snapshot(snap_src, dir, dentry, readonly, inherit);
 	else
-		ret = create_subvol(idmap, dir, dentry, inherit);
+		error = create_subvol(idmap, dir, dentry, inherit);
 
-	if (!ret)
+	if (!error)
 		fsnotify_mkdir(dir, dentry);
 out_up_read:
 	up_read(&fs_info->subvol_sem);
@@ -943,12 +945,12 @@ out_dput:
 	dput(dentry);
 out_unlock:
 	btrfs_inode_unlock(BTRFS_I(dir), 0);
-	return ret;
+	return error;
 }
 
-static noinline int btrfs_mksnapshot(struct dentry *parent,
+static noinline int btrfs_mksnapshot(const struct path *parent,
 				   struct mnt_idmap *idmap,
-				   struct qstr *qname,
+				   const char *name, int namelen,
 				   struct btrfs_root *root,
 				   bool readonly,
 				   struct btrfs_qgroup_inherit *inherit)
@@ -975,8 +977,8 @@ static noinline int btrfs_mksnapshot(struct dentry *parent,
 
 	btrfs_wait_ordered_extents(root, U64_MAX, NULL);
 
-	ret = btrfs_mksubvol(parent, idmap, qname, root, readonly, inherit);
-
+	ret = btrfs_mksubvol(parent, idmap, name, namelen,
+			     root, readonly, inherit);
 	atomic_dec(&root->snapshot_force_cow);
 out:
 	btrfs_drew_read_unlock(&root->snapshot_lock);
@@ -1167,7 +1169,7 @@ static noinline int btrfs_ioctl_resize(struct file *file,
 	} /* equal, nothing need to do */
 
 	if (ret == 0 && new_size != old_size)
-		btrfs_info(fs_info,
+		btrfs_info_in_rcu(fs_info,
 			"resize device %s (devid %llu) from %llu to %llu",
 			btrfs_dev_name(device), device->devid,
 			old_size, new_size);
@@ -1182,12 +1184,12 @@ out_drop:
 
 static noinline int __btrfs_ioctl_snap_create(struct file *file,
 				struct mnt_idmap *idmap,
-				const char *name, unsigned long fd, bool subvol,
+				const char *name, unsigned long fd, int subvol,
 				bool readonly,
 				struct btrfs_qgroup_inherit *inherit)
 {
+	int namelen;
 	int ret = 0;
-	struct qstr qname = QSTR_INIT(name, strlen(name));
 
 	if (!S_ISDIR(file_inode(file)->i_mode))
 		return -ENOTDIR;
@@ -1196,20 +1198,21 @@ static noinline int __btrfs_ioctl_snap_create(struct file *file,
 	if (ret)
 		goto out;
 
+	namelen = strlen(name);
 	if (strchr(name, '/')) {
 		ret = -EINVAL;
 		goto out_drop_write;
 	}
 
-	if (qname.name[0] == '.' &&
-	   (qname.len == 1 || (qname.name[1] == '.' && qname.len == 2))) {
+	if (name[0] == '.' &&
+	   (namelen == 1 || (name[1] == '.' && namelen == 2))) {
 		ret = -EEXIST;
 		goto out_drop_write;
 	}
 
 	if (subvol) {
-		ret = btrfs_mksubvol(file_dentry(file), idmap, &qname, NULL,
-				     readonly, inherit);
+		ret = btrfs_mksubvol(&file->f_path, idmap, name,
+				     namelen, NULL, readonly, inherit);
 	} else {
 		CLASS(fd, src)(fd);
 		struct inode *src_inode;
@@ -1239,7 +1242,8 @@ static noinline int __btrfs_ioctl_snap_create(struct file *file,
 			 */
 			ret = -EINVAL;
 		} else {
-			ret = btrfs_mksnapshot(file_dentry(file), idmap, &qname,
+			ret = btrfs_mksnapshot(&file->f_path, idmap,
+					       name, namelen,
 					       BTRFS_I(src_inode)->root,
 					       readonly, inherit);
 		}
@@ -1276,7 +1280,7 @@ out:
 }
 
 static noinline int btrfs_ioctl_snap_create_v2(struct file *file,
-					       void __user *arg, bool subvol)
+					       void __user *arg, int subvol)
 {
 	struct btrfs_ioctl_vol_args_v2 *vol_args;
 	int ret;
@@ -2554,14 +2558,8 @@ static int btrfs_ioctl_defrag(struct file *file, void __user *argp)
 				ret = -EOPNOTSUPP;
 				goto out;
 			}
-			if ((range.flags & BTRFS_DEFRAG_RANGE_COMPRESS) &&
-			    (range.flags & BTRFS_DEFRAG_RANGE_NOCOMPRESS)) {
-				ret = -EINVAL;
-				goto out;
-			}
-			/* Compression or no-compression require to start the IO. */
-			if ((range.flags & BTRFS_DEFRAG_RANGE_COMPRESS) ||
-			    (range.flags & BTRFS_DEFRAG_RANGE_NOCOMPRESS)) {
+			/* compression requires us to start the IO */
+			if ((range.flags & BTRFS_DEFRAG_RANGE_COMPRESS)) {
 				range.flags |= BTRFS_DEFRAG_RANGE_START_IO;
 				range.extent_thresh = (u32)-1;
 			}
@@ -2702,7 +2700,7 @@ static long btrfs_ioctl_rm_dev_v2(struct file *file, void __user *arg)
 err_drop:
 	mnt_drop_write_file(file);
 	if (bdev_file)
-		bdev_fput(bdev_file);
+		fput(bdev_file);
 out:
 	btrfs_put_dev_args_from_path(&args);
 	kfree(vol_args);
@@ -2753,7 +2751,7 @@ static long btrfs_ioctl_rm_dev(struct file *file, void __user *arg)
 
 	mnt_drop_write_file(file);
 	if (bdev_file)
-		bdev_fput(bdev_file);
+		fput(bdev_file);
 out:
 	btrfs_put_dev_args_from_path(&args);
 out_free:
@@ -2892,7 +2890,7 @@ static long btrfs_ioctl_default_subvol(struct file *file, void __user *argp)
 		ret = PTR_ERR(new_root);
 		goto out;
 	}
-	if (!btrfs_is_fstree(btrfs_root_id(new_root))) {
+	if (!is_fstree(btrfs_root_id(new_root))) {
 		ret = -ENOENT;
 		goto out_free;
 	}
@@ -3359,6 +3357,7 @@ static long btrfs_ioctl_logical_to_ino(struct btrfs_fs_info *fs_info,
 	int size;
 	struct btrfs_ioctl_logical_ino_args *loi;
 	struct btrfs_data_container *inodes = NULL;
+	struct btrfs_path *path = NULL;
 	bool ignore_offset;
 
 	if (!capable(CAP_SYS_ADMIN))
@@ -3392,7 +3391,14 @@ static long btrfs_ioctl_logical_to_ino(struct btrfs_fs_info *fs_info,
 		goto out_loi;
 	}
 
-	ret = iterate_inodes_from_logical(loi->logical, fs_info, inodes, ignore_offset);
+	path = btrfs_alloc_path();
+	if (!path) {
+		ret = -ENOMEM;
+		goto out;
+	}
+	ret = iterate_inodes_from_logical(loi->logical, fs_info, path,
+					  inodes, ignore_offset);
+	btrfs_free_path(path);
 	if (ret == -EINVAL)
 		ret = -ENOENT;
 	if (ret < 0)
@@ -3709,6 +3715,22 @@ drop_write:
 	return ret;
 }
 
+/*
+ * Quick check for ioctl handlers if quotas are enabled. Proper locking must be
+ * done before any operations.
+ */
+static bool qgroup_enabled(struct btrfs_fs_info *fs_info)
+{
+	bool ret = true;
+
+	mutex_lock(&fs_info->qgroup_ioctl_lock);
+	if (!fs_info->quota_root)
+		ret = false;
+	mutex_unlock(&fs_info->qgroup_ioctl_lock);
+
+	return ret;
+}
+
 static long btrfs_ioctl_qgroup_assign(struct file *file, void __user *arg)
 {
 	struct inode *inode = file_inode(file);
@@ -3723,7 +3745,7 @@ static long btrfs_ioctl_qgroup_assign(struct file *file, void __user *arg)
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
-	if (!btrfs_qgroup_enabled(fs_info))
+	if (!qgroup_enabled(root->fs_info))
 		return -ENOTCONN;
 
 	ret = mnt_want_write_file(file);
@@ -3793,7 +3815,7 @@ static long btrfs_ioctl_qgroup_create(struct file *file, void __user *arg)
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
-	if (!btrfs_qgroup_enabled(root->fs_info))
+	if (!qgroup_enabled(root->fs_info))
 		return -ENOTCONN;
 
 	ret = mnt_want_write_file(file);
@@ -3811,7 +3833,7 @@ static long btrfs_ioctl_qgroup_create(struct file *file, void __user *arg)
 		goto out;
 	}
 
-	if (sa->create && btrfs_is_fstree(sa->qgroupid)) {
+	if (sa->create && is_fstree(sa->qgroupid)) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -3852,7 +3874,7 @@ static long btrfs_ioctl_qgroup_limit(struct file *file, void __user *arg)
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
-	if (!btrfs_qgroup_enabled(root->fs_info))
+	if (!qgroup_enabled(root->fs_info))
 		return -ENOTCONN;
 
 	ret = mnt_want_write_file(file);
@@ -3900,7 +3922,7 @@ static long btrfs_ioctl_quota_rescan(struct file *file, void __user *arg)
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
-	if (!btrfs_qgroup_enabled(fs_info))
+	if (!qgroup_enabled(fs_info))
 		return -ENOTCONN;
 
 	ret = mnt_want_write_file(file);
@@ -4178,7 +4200,7 @@ static int btrfs_ioctl_set_fslabel(struct file *file, void __user *arg)
 	}
 
 	spin_lock(&fs_info->super_lock);
-	strscpy(super_block->label, label);
+	strcpy(super_block->label, label);
 	spin_unlock(&fs_info->super_lock);
 	ret = btrfs_commit_transaction(trans);
 
@@ -4607,13 +4629,6 @@ out_acct:
 	return ret;
 }
 
-struct btrfs_uring_encoded_data {
-	struct btrfs_ioctl_encoded_io_args args;
-	struct iovec iovstack[UIO_FASTIOV];
-	struct iovec *iov;
-	struct iov_iter iter;
-};
-
 /*
  * Context that's attached to an encoded read io_uring command, in cmd->pdu. It
  * contains the fields in btrfs_uring_read_extent that are necessary to finish
@@ -4635,7 +4650,6 @@ struct btrfs_uring_priv {
 };
 
 struct io_btrfs_cmd {
-	struct btrfs_uring_encoded_data *data;
 	struct btrfs_uring_priv *priv;
 };
 
@@ -4645,7 +4659,7 @@ static void btrfs_uring_read_finished(struct io_uring_cmd *cmd, unsigned int iss
 	struct btrfs_uring_priv *priv = bc->priv;
 	struct btrfs_inode *inode = BTRFS_I(file_inode(priv->iocb.ki_filp));
 	struct extent_io_tree *io_tree = &inode->io_tree;
-	pgoff_t index;
+	unsigned long index;
 	u64 cur;
 	size_t page_offset;
 	ssize_t ret;
@@ -4694,7 +4708,6 @@ out:
 	kfree(priv->pages);
 	kfree(priv->iov);
 	kfree(priv);
-	kfree(bc->data);
 }
 
 void btrfs_uring_read_extent_endio(void *ctx, int err)
@@ -4778,6 +4791,13 @@ out_fail:
 	return ret;
 }
 
+struct btrfs_uring_encoded_data {
+	struct btrfs_ioctl_encoded_io_args args;
+	struct iovec iovstack[UIO_FASTIOV];
+	struct iovec *iov;
+	struct iov_iter iter;
+};
+
 static int btrfs_uring_encoded_read(struct io_uring_cmd *cmd, unsigned int issue_flags)
 {
 	size_t copy_end_kernel = offsetofend(struct btrfs_ioctl_encoded_io_args, flags);
@@ -4793,11 +4813,7 @@ static int btrfs_uring_encoded_read(struct io_uring_cmd *cmd, unsigned int issue
 	struct extent_state *cached_state = NULL;
 	u64 start, lockend;
 	void __user *sqe_addr;
-	struct io_btrfs_cmd *bc = io_uring_cmd_to_pdu(cmd, struct io_btrfs_cmd);
-	struct btrfs_uring_encoded_data *data = NULL;
-
-	if (cmd->flags & IORING_URING_CMD_REISSUE)
-		data = bc->data;
+	struct btrfs_uring_encoded_data *data = io_uring_cmd_get_async_data(cmd)->op_data;
 
 	if (!capable(CAP_SYS_ADMIN)) {
 		ret = -EPERM;
@@ -4813,8 +4829,7 @@ static int btrfs_uring_encoded_read(struct io_uring_cmd *cmd, unsigned int issue
 #if defined(CONFIG_64BIT) && defined(CONFIG_COMPAT)
 		copy_end = offsetofend(struct btrfs_ioctl_encoded_io_args_32, flags);
 #else
-		ret = -ENOTTY;
-		goto out_acct;
+		return -ENOTTY;
 #endif
 	} else {
 		copy_end = copy_end_kernel;
@@ -4827,7 +4842,7 @@ static int btrfs_uring_encoded_read(struct io_uring_cmd *cmd, unsigned int issue
 			goto out_acct;
 		}
 
-		bc->data = data;
+		io_uring_cmd_get_async_data(cmd)->op_data = data;
 
 		if (issue_flags & IO_URING_F_COMPAT) {
 #if defined(CONFIG_64BIT) && defined(CONFIG_COMPAT)
@@ -4925,9 +4940,6 @@ out_acct:
 		add_rchar(current, ret);
 	inc_syscr(current);
 
-	if (ret != -EIOCBQUEUED && ret != -EAGAIN)
-		kfree(data);
-
 	return ret;
 }
 
@@ -4938,11 +4950,7 @@ static int btrfs_uring_encoded_write(struct io_uring_cmd *cmd, unsigned int issu
 	struct file *file;
 	ssize_t ret;
 	void __user *sqe_addr;
-	struct io_btrfs_cmd *bc = io_uring_cmd_to_pdu(cmd, struct io_btrfs_cmd);
-	struct btrfs_uring_encoded_data *data = NULL;
-
-	if (cmd->flags & IORING_URING_CMD_REISSUE)
-		data = bc->data;
+	struct btrfs_uring_encoded_data *data = io_uring_cmd_get_async_data(cmd)->op_data;
 
 	if (!capable(CAP_SYS_ADMIN)) {
 		ret = -EPERM;
@@ -4964,7 +4972,7 @@ static int btrfs_uring_encoded_write(struct io_uring_cmd *cmd, unsigned int issu
 			goto out_acct;
 		}
 
-		bc->data = data;
+		io_uring_cmd_get_async_data(cmd)->op_data = data;
 
 		if (issue_flags & IO_URING_F_COMPAT) {
 #if defined(CONFIG_64BIT) && defined(CONFIG_COMPAT)
@@ -5054,9 +5062,6 @@ out_acct:
 	if (ret > 0)
 		add_wchar(current, ret);
 	inc_syscw(current);
-
-	if (ret != -EAGAIN)
-		kfree(data);
 	return ret;
 }
 

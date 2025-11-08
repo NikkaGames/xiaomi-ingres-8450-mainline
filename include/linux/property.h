@@ -17,7 +17,6 @@
 #include <linux/fwnode.h>
 #include <linux/stddef.h>
 #include <linux/types.h>
-#include <linux/util_macros.h>
 
 struct device;
 
@@ -170,7 +169,7 @@ struct fwnode_handle *fwnode_get_next_available_child_node(
 
 #define fwnode_for_each_named_child_node(fwnode, child, name)		\
 	fwnode_for_each_child_node(fwnode, child)			\
-		for_each_if(fwnode_name_eq(child, name))
+		if (!fwnode_name_eq(child, name)) { } else
 
 #define fwnode_for_each_available_child_node(fwnode, child)		       \
 	for (child = fwnode_get_next_available_child_node(fwnode, NULL); child;\
@@ -185,7 +184,7 @@ struct fwnode_handle *device_get_next_child_node(const struct device *dev,
 
 #define device_for_each_named_child_node(dev, child, name)		\
 	device_for_each_child_node(dev, child)				\
-		for_each_if(fwnode_name_eq(child, name))
+		if (!fwnode_name_eq(child, name)) { } else
 
 #define device_for_each_child_node_scoped(dev, child)			\
 	for (struct fwnode_handle *child __free(fwnode_handle) =	\
@@ -194,7 +193,7 @@ struct fwnode_handle *device_get_next_child_node(const struct device *dev,
 
 #define device_for_each_named_child_node_scoped(dev, child, name)	\
 	device_for_each_child_node_scoped(dev, child)			\
-		for_each_if(fwnode_name_eq(child, name))
+		if (!fwnode_name_eq(child, name)) { } else
 
 struct fwnode_handle *fwnode_get_named_child_node(const struct fwnode_handle *fwnode,
 						  const char *childname);

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Arnaldo Carvalho de Melo <acme@kernel.org>, 2017
 
 perf probe -l 2>&1 | grep -q probe:vfs_getname

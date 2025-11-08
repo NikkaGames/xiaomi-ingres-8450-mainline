@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # perf trace record and replay
 # SPDX-License-Identifier: GPL-2.0
 

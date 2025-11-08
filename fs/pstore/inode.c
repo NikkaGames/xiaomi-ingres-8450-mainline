@@ -300,7 +300,7 @@ static struct dentry *psinfo_lock_root(void)
 		return NULL;
 
 	root = pstore_sb->s_root;
-	inode_lock_nested(d_inode(root), I_MUTEX_PARENT);
+	inode_lock(d_inode(root));
 
 	return root;
 }
@@ -318,7 +318,8 @@ int pstore_put_backend_records(struct pstore_info *psi)
 		list_for_each_entry_safe(pos, tmp, &records_list, list) {
 			if (pos->record->psi == psi) {
 				list_del_init(&pos->list);
-				locked_recursive_removal(pos->dentry, NULL);
+				d_invalidate(pos->dentry);
+				simple_unlink(d_inode(root), pos->dentry);
 				pos->dentry = NULL;
 			}
 		}

@@ -97,7 +97,7 @@
 		clock-names = "ext_clock";
 	};
 
-	cvbs_connector: cvbs-connector {
+	cvbs-connector {
 		compatible = "composite-video-connector";
 
 		port {

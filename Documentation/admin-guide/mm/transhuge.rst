@@ -107,7 +107,7 @@ sysfs
 Global THP controls
 -------------------
 
-Transparent Hugepage Support for anonymous memory can be disabled
+Transparent Hugepage Support for anonymous memory can be entirely disabled
 (mostly for debugging purposes) or only enabled inside MADV_HUGEPAGE
 regions (to avoid the risk of consuming more memory resources) or enabled
 system wide. This can be achieved per-supported-THP-size with one of::
@@ -118,11 +118,6 @@ system wide. This can be achieved per-supported-THP-size with one of::
 
 where <size> is the hugepage size being addressed, the available sizes
 for which vary by system.
-
-.. note:: Setting "never" in all sysfs THP controls does **not** disable
-          Transparent Huge Pages globally. This is because ``madvise(...,
-          MADV_COLLAPSE)`` ignores these settings and collapses ranges to
-          PMD-sized huge pages unconditionally.
 
 For example::
 
@@ -192,9 +187,7 @@ madvise
 	behaviour.
 
 never
-	should be self-explanatory. Note that ``madvise(...,
-	MADV_COLLAPSE)`` can still cause transparent huge pages to be
-	obtained even if this mode is specified everywhere.
+	should be self-explanatory.
 
 By default kernel tries to use huge, PMD-mappable zero page on read
 page fault to anonymous mapping. It's possible to disable huge zero
@@ -385,9 +378,7 @@ always
     Attempt to allocate huge pages every time we need a new page;
 
 never
-    Do not allocate huge pages. Note that ``madvise(..., MADV_COLLAPSE)``
-    can still cause transparent huge pages to be obtained even if this mode
-    is specified everywhere;
+    Do not allocate huge pages;
 
 within_size
     Only allocate huge page if it will be fully within i_size.
@@ -443,9 +434,7 @@ inherit
     have enabled="inherit" and all other hugepage sizes have enabled="never";
 
 never
-    Do not allocate <size> huge pages. Note that ``madvise(...,
-    MADV_COLLAPSE)`` can still cause transparent huge pages to be obtained
-    even if this mode is specified everywhere;
+    Do not allocate <size> huge pages;
 
 within_size
     Only allocate <size> huge page if it will be fully within i_size.

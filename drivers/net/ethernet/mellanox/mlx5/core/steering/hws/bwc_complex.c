@@ -1328,11 +1328,11 @@ mlx5hws_bwc_matcher_move_all_complex(struct mlx5hws_bwc_matcher *bwc_matcher)
 {
 	struct mlx5hws_context *ctx = bwc_matcher->matcher->tbl->ctx;
 	struct mlx5hws_matcher *matcher = bwc_matcher->matcher;
+	bool move_error = false, poll_error = false;
 	u16 bwc_queues = mlx5hws_bwc_queues(ctx);
 	struct mlx5hws_bwc_rule *tmp_bwc_rule;
 	struct mlx5hws_rule_attr rule_attr;
 	struct mlx5hws_table *isolated_tbl;
-	int move_error = 0, poll_error = 0;
 	struct mlx5hws_rule *tmp_rule;
 	struct list_head *rules_list;
 	u32 expected_completions = 1;
@@ -1391,15 +1391,11 @@ mlx5hws_bwc_matcher_move_all_complex(struct mlx5hws_bwc_matcher *bwc_matcher)
 			ret = mlx5hws_matcher_resize_rule_move(matcher,
 							       tmp_rule,
 							       &rule_attr);
-			if (unlikely(ret)) {
-				if (!move_error) {
-					mlx5hws_err(ctx,
-						    "Moving complex BWC rule: move failed (%d), attempting to move rest of the rules\n",
-						    ret);
-					move_error = ret;
-				}
-				/* Rule wasn't queued, no need to poll */
-				continue;
+			if (unlikely(ret && !move_error)) {
+				mlx5hws_err(ctx,
+					    "Moving complex BWC rule failed (%d), attempting to move rest of the rules\n",
+					    ret);
+				move_error = true;
 			}
 
 			expected_completions = 1;
@@ -1407,19 +1403,11 @@ mlx5hws_bwc_matcher_move_all_complex(struct mlx5hws_bwc_matcher *bwc_matcher)
 						     rule_attr.queue_id,
 						     &expected_completions,
 						     true);
-			if (unlikely(ret)) {
-				if (ret == -ETIMEDOUT) {
-					mlx5hws_err(ctx,
-						    "Moving complex BWC rule: timeout polling for completions (%d), aborting rehash\n",
-						    ret);
-					return ret;
-				}
-				if (!poll_error) {
-					mlx5hws_err(ctx,
-						    "Moving complex BWC rule: polling for completions failed (%d), attempting to move rest of the rules\n",
-						    ret);
-					poll_error = ret;
-				}
+			if (unlikely(ret && !poll_error)) {
+				mlx5hws_err(ctx,
+					    "Moving complex BWC rule: poll failed (%d), attempting to move rest of the rules\n",
+					    ret);
+				poll_error = true;
 			}
 
 			/* Done moving the rule to the new matcher,
@@ -1434,11 +1422,8 @@ mlx5hws_bwc_matcher_move_all_complex(struct mlx5hws_bwc_matcher *bwc_matcher)
 		}
 	}
 
-	/* Return the first error that happened */
-	if (unlikely(move_error))
-		return move_error;
-	if (unlikely(poll_error))
-		return poll_error;
+	if (move_error || poll_error)
+		ret = -EINVAL;
 
 	return ret;
 }

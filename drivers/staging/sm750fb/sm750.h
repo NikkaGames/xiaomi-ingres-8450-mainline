@@ -113,7 +113,7 @@ struct sm750_dev {
 	 * 2: secondary crtc hw cursor enabled
 	 * 3: both ctrc hw cursor enabled
 	 */
-	int hw_cursor;
+	int hwCursor;
 };
 
 struct lynx_cursor {
@@ -169,6 +169,8 @@ struct lynxfb_output {
 	 * output->channel ==> &crtc->channel
 	 */
 	void *priv;
+
+	int (*proc_setBLANK)(struct lynxfb_output *output, int blank);
 };
 
 struct lynxfb_par {

@@ -34,7 +34,6 @@ reuseport_bpf_numa
 reuseport_dualstack
 rxtimestamp
 sctp_hello
-scm_inq
 scm_pidfd
 scm_rights
 sk_bind_sendto_listen

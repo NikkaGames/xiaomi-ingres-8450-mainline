@@ -14,7 +14,6 @@ struct dc;
 struct dc_state;
 struct dml2_configuration_options;
 struct dml2_context;
-enum dc_validate_mode;
 
 /**
  * dml2_create - Creates dml21_context.
@@ -34,23 +33,22 @@ void dml21_copy(struct dml2_context *dst_dml_ctx,
 	struct dml2_context *src_dml_ctx);
 bool dml21_create_copy(struct dml2_context **dst_dml_ctx,
 	struct dml2_context *src_dml_ctx);
-void dml21_reinit(const struct dc *in_dc, struct dml2_context *dml_ctx, const struct dml2_configuration_options *config);
+void dml21_reinit(const struct dc *in_dc, struct dml2_context **dml_ctx, const struct dml2_configuration_options *config);
 
 /**
  * dml21_validate - Determines if a display configuration is supported or not.
  * @in_dc: dc.
  * @context: dc_state to be validated.
- * @validate_mode: DC_VALIDATE_MODE_ONLY and DC_VALIDATE_MODE_AND_STATE_INDEX
- *           will not populate context.res_ctx.
+ * @fast_validate: Fast validate will not populate context.res_ctx.
  *
  * Based on fast_validate option internally would call:
  *
- * -dml21_mode_check_and_programming - for DC_VALIDATE_MODE_AND_PROGRAMMING option
+ * -dml21_mode_check_and_programming - for non fast_validate option
  * Calculates if dc_state can be supported on the input display
  * configuration. If supported, generates the necessary HW
  * programming for the new dc_state.
  *
- * -dml21_check_mode_support - for DC_VALIDATE_MODE_ONLY and DC_VALIDATE_MODE_AND_STATE_INDEX option
+ * -dml21_check_mode_support - for fast_validate option
  * Calculates if dc_state can be supported for the input display
  * config.
 
@@ -58,8 +56,7 @@ void dml21_reinit(const struct dc *in_dc, struct dml2_context *dml_ctx, const st
  *          separate dc_states for validation.
  * Return: True if mode is supported, false otherwise.
  */
-bool dml21_validate(const struct dc *in_dc, struct dc_state *context, struct dml2_context *dml_ctx,
-	enum dc_validate_mode validate_mode);
+bool dml21_validate(const struct dc *in_dc, struct dc_state *context, struct dml2_context *dml_ctx, bool fast_validate);
 
 /* Prepare hubp mcache_regs for hubp mcache ID and split coordinate programming */
 void dml21_prepare_mcache_programming(struct dc *in_dc, struct dc_state *context, struct dml2_context *dml_ctx);

@@ -39,7 +39,6 @@ enum reg_type {
  * struct fsl_mqs_soc_data - soc specific data
  *
  * @type: control register space type
- * @sm_index: index from definition in system manager
  * @ctrl_off: control register offset
  * @en_mask: enable bit mask
  * @en_shift: enable bit shift
@@ -52,7 +51,6 @@ enum reg_type {
  */
 struct fsl_mqs_soc_data {
 	enum reg_type type;
-	int  sm_index;
 	int  ctrl_off;
 	int  en_mask;
 	int  en_shift;
@@ -84,7 +82,7 @@ static int fsl_mqs_sm_read(void *context, unsigned int reg, unsigned int *val)
 
 	if (IS_ENABLED(CONFIG_IMX_SCMI_MISC_DRV) &&
 	    mqs_priv->soc->ctrl_off == reg)
-		return scmi_imx_misc_ctrl_get(mqs_priv->soc->sm_index, &num, val);
+		return scmi_imx_misc_ctrl_get(SCMI_IMX_CTRL_MQS1_SETTINGS, &num, val);
 
 	return -EINVAL;
 };
@@ -95,7 +93,7 @@ static int fsl_mqs_sm_write(void *context, unsigned int reg, unsigned int val)
 
 	if (IS_ENABLED(CONFIG_IMX_SCMI_MISC_DRV) &&
 	    mqs_priv->soc->ctrl_off == reg)
-		return scmi_imx_misc_ctrl_set(mqs_priv->soc->sm_index, val);
+		return scmi_imx_misc_ctrl_set(SCMI_IMX_CTRL_MQS1_SETTINGS, val);
 
 	return -EINVAL;
 };
@@ -388,7 +386,6 @@ static const struct fsl_mqs_soc_data fsl_mqs_imx93_data = {
 
 static const struct fsl_mqs_soc_data fsl_mqs_imx95_aon_data = {
 	.type = TYPE_REG_SM,
-	.sm_index = SCMI_IMX95_CTRL_MQS1_SETTINGS,
 	.ctrl_off = 0x88,
 	.en_mask  = BIT(1),
 	.en_shift = 1,
@@ -415,7 +412,6 @@ static const struct fsl_mqs_soc_data fsl_mqs_imx95_netc_data = {
 
 static const struct fsl_mqs_soc_data fsl_mqs_imx943_aon_data = {
 	.type = TYPE_REG_SM,
-	.sm_index = SCMI_IMX94_CTRL_MQS1_SETTINGS,
 	.ctrl_off = 0x88,
 	.en_mask  = BIT(1),
 	.en_shift = 1,
@@ -428,8 +424,7 @@ static const struct fsl_mqs_soc_data fsl_mqs_imx943_aon_data = {
 };
 
 static const struct fsl_mqs_soc_data fsl_mqs_imx943_wakeup_data = {
-	.type = TYPE_REG_SM,
-	.sm_index = SCMI_IMX94_CTRL_MQS2_SETTINGS,
+	.type = TYPE_REG_GPR,
 	.ctrl_off = 0x10,
 	.en_mask  = BIT(1),
 	.en_shift = 1,

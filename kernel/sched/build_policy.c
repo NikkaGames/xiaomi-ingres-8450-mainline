@@ -50,9 +50,11 @@
 #include "idle.c"
 
 #include "rt.c"
-#include "cpudeadline.c"
 
-#include "pelt.c"
+#ifdef CONFIG_SMP
+# include "cpudeadline.c"
+# include "pelt.c"
+#endif
 
 #include "cputime.c"
 #include "deadline.c"

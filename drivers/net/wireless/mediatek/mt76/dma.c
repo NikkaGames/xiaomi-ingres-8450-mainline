@@ -643,8 +643,10 @@ mt76_dma_rx_fill_buf(struct mt76_dev *dev, struct mt76_queue *q,
 
 	while (q->queued < q->ndesc - 1) {
 		struct mt76_queue_buf qbuf = {};
-		void *buf = NULL;
+		enum dma_data_direction dir;
+		dma_addr_t addr;
 		int offset;
+		void *buf = NULL;
 
 		if (mt76_queue_is_wed_rro_ind(q))
 			goto done;
@@ -653,8 +655,11 @@ mt76_dma_rx_fill_buf(struct mt76_dev *dev, struct mt76_queue *q,
 		if (!buf)
 			break;
 
-		qbuf.addr = page_pool_get_dma_addr(virt_to_head_page(buf)) +
-			    offset + q->buf_offset;
+		addr = page_pool_get_dma_addr(virt_to_head_page(buf)) + offset;
+		dir = page_pool_get_dma_dir(q->page_pool);
+		dma_sync_single_for_device(dev->dma_dev, addr, len, dir);
+
+		qbuf.addr = addr + q->buf_offset;
 done:
 		qbuf.len = len - q->buf_offset;
 		qbuf.skip_unmap = false;

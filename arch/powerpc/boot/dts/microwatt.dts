@@ -37,7 +37,7 @@
 
 		ibm,powerpc-cpu-features {
 			display-name = "Microwatt";
-			isa = <3100>;
+			isa = <3010>;
 			device_type = "cpu-features";
 			compatible = "ibm,powerpc-cpu-features";
 

@@ -9,7 +9,6 @@
 #define pr_fmt(fmt)	KBUILD_MODNAME ": " fmt
 
 #include <linux/clk.h>
-#include <linux/reset.h>
 #include <linux/dma-mapping.h>
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
@@ -102,8 +101,6 @@ struct ftgmac100 {
 
 	/* AST2500/AST2600 RMII ref clock gate */
 	struct clk *rclk;
-	/* Aspeed reset control */
-	struct reset_control *rst;
 
 	/* Link management */
 	int cur_speed;
@@ -150,23 +147,6 @@ static int ftgmac100_reset_mac(struct ftgmac100 *priv, u32 maccr)
 static int ftgmac100_reset_and_config_mac(struct ftgmac100 *priv)
 {
 	u32 maccr = 0;
-
-	/* Aspeed RMII needs SCU reset to clear status */
-	if (priv->is_aspeed && priv->netdev->phydev->interface == PHY_INTERFACE_MODE_RMII) {
-		int err;
-
-		err = reset_control_assert(priv->rst);
-		if (err) {
-			dev_err(priv->dev, "Failed to reset mac (%d)\n", err);
-			return err;
-		}
-		usleep_range(10000, 20000);
-		err = reset_control_deassert(priv->rst);
-		if (err) {
-			dev_err(priv->dev, "Failed to deassert mac reset (%d)\n", err);
-			return err;
-		}
-	}
 
 	switch (priv->cur_speed) {
 	case SPEED_10:
@@ -1448,7 +1428,7 @@ static void ftgmac100_adjust_link(struct net_device *netdev)
 	/* Disable all interrupts */
 	iowrite32(0, priv->base + FTGMAC100_OFFSET_IER);
 
-	/* Release phy lock to allow ftgmac100_reset to acquire it, keeping lock
+	/* Release phy lock to allow ftgmac100_reset to aquire it, keeping lock
 	 * order consistent to prevent dead lock.
 	 */
 	if (netdev->phydev)
@@ -1750,17 +1730,16 @@ err_register_mdiobus:
 static void ftgmac100_phy_disconnect(struct net_device *netdev)
 {
 	struct ftgmac100 *priv = netdev_priv(netdev);
-	struct phy_device *phydev = netdev->phydev;
 
-	if (!phydev)
+	if (!netdev->phydev)
 		return;
 
-	phy_disconnect(phydev);
+	phy_disconnect(netdev->phydev);
 	if (of_phy_is_fixed_link(priv->dev->of_node))
 		of_phy_deregister_fixed_link(priv->dev->of_node);
 
 	if (priv->use_ncsi)
-		fixed_phy_unregister(phydev);
+		fixed_phy_unregister(netdev->phydev);
 }
 
 static void ftgmac100_destroy_mdio(struct net_device *netdev)
@@ -1987,12 +1966,6 @@ static int ftgmac100_probe(struct platform_device *pdev)
 			goto err_ncsi_dev;
 		}
 
-	}
-
-	priv->rst = devm_reset_control_get_optional_exclusive(priv->dev, NULL);
-	if (IS_ERR(priv->rst)) {
-		err = PTR_ERR(priv->rst);
-		goto err_phy_connect;
 	}
 
 	if (priv->is_aspeed) {

@@ -937,10 +937,11 @@ static int au1xmmc_probe(struct platform_device *pdev)
 	struct resource *r;
 	int ret, iflag;
 
-	mmc = devm_mmc_alloc_host(&pdev->dev, sizeof(*host));
+	mmc = mmc_alloc_host(sizeof(struct au1xmmc_host), &pdev->dev);
 	if (!mmc) {
 		dev_err(&pdev->dev, "no memory for mmc_host\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto out0;
 	}
 
 	host = mmc_priv(mmc);
@@ -952,14 +953,14 @@ static int au1xmmc_probe(struct platform_device *pdev)
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!r) {
 		dev_err(&pdev->dev, "no mmio defined\n");
-		return ret;
+		goto out1;
 	}
 
 	host->ioarea = request_mem_region(r->start, resource_size(r),
 					   pdev->name);
 	if (!host->ioarea) {
 		dev_err(&pdev->dev, "mmio already in use\n");
-		return ret;
+		goto out1;
 	}
 
 	host->iobase = ioremap(r->start, 0x3c);
@@ -1108,6 +1109,9 @@ out3:
 out2:
 	release_resource(host->ioarea);
 	kfree(host->ioarea);
+out1:
+	mmc_free_host(mmc);
+out0:
 	return ret;
 }
 
@@ -1147,6 +1151,8 @@ static void au1xmmc_remove(struct platform_device *pdev)
 		iounmap((void *)host->iobase);
 		release_resource(host->ioarea);
 		kfree(host->ioarea);
+
+		mmc_free_host(host->mmc);
 	}
 }
 

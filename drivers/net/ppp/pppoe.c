@@ -372,6 +372,9 @@ static int pppoe_rcv_core(struct sock *sk, struct sk_buff *skb)
 	 * can't change.
 	 */
 
+	if (skb->pkt_type == PACKET_OTHERHOST)
+		goto abort_kfree;
+
 	if (sk->sk_state & PPPOX_BOUND) {
 		ppp_input(&po->chan, skb);
 	} else if (sk->sk_state & PPPOX_RELAY) {
@@ -414,9 +417,6 @@ static int pppoe_rcv(struct sk_buff *skb, struct net_device *dev,
 	struct pppox_sock *po;
 	struct pppoe_net *pn;
 	int len;
-
-	if (skb->pkt_type == PACKET_OTHERHOST)
-		goto drop;
 
 	skb = skb_share_check(skb, GFP_ATOMIC);
 	if (!skb)

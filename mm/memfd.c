@@ -32,7 +32,8 @@
 
 static bool memfd_folio_has_extra_refs(struct folio *folio)
 {
-	return folio_ref_count(folio) != folio_expected_ref_count(folio);
+	return folio_ref_count(folio) - folio_mapcount(folio) !=
+	       folio_nr_pages(folio);
 }
 
 static void memfd_tag_pins(struct xa_state *xas)
@@ -70,6 +71,7 @@ struct folio *memfd_alloc_folio(struct file *memfd, pgoff_t idx)
 #ifdef CONFIG_HUGETLB_PAGE
 	struct folio *folio;
 	gfp_t gfp_mask;
+	int err;
 
 	if (is_file_hugepages(memfd)) {
 		/*
@@ -78,18 +80,11 @@ struct folio *memfd_alloc_folio(struct file *memfd, pgoff_t idx)
 		 * alloc from. Also, the folio will be pinned for an indefinite
 		 * amount of time, so it is not expected to be migrated away.
 		 */
-		struct inode *inode = file_inode(memfd);
 		struct hstate *h = hstate_file(memfd);
-		int err = -ENOMEM;
-		long nr_resv;
 
 		gfp_mask = htlb_alloc_mask(h);
 		gfp_mask &= ~(__GFP_HIGHMEM | __GFP_MOVABLE);
 		idx >>= huge_page_order(h);
-
-		nr_resv = hugetlb_reserve_pages(inode, idx, idx + 1, NULL, 0);
-		if (nr_resv < 0)
-			return ERR_PTR(nr_resv);
 
 		folio = alloc_hugetlb_folio_reserve(h,
 						    numa_node_id(),
@@ -101,17 +96,12 @@ struct folio *memfd_alloc_folio(struct file *memfd, pgoff_t idx)
 							idx);
 			if (err) {
 				folio_put(folio);
-				goto err_unresv;
+				return ERR_PTR(err);
 			}
-
-			hugetlb_set_folio_subpool(folio, subpool_inode(inode));
 			folio_unlock(folio);
 			return folio;
 		}
-err_unresv:
-		if (nr_resv > 0)
-			hugetlb_unreserve_pages(inode, idx, idx + 1, 0);
-		return ERR_PTR(err);
+		return ERR_PTR(-ENOMEM);
 	}
 #endif
 	return shmem_read_folio(memfd->f_mapping, idx);
@@ -343,10 +333,10 @@ static inline bool is_write_sealed(unsigned int seals)
 	return seals & (F_SEAL_WRITE | F_SEAL_FUTURE_WRITE);
 }
 
-static int check_write_seal(vm_flags_t *vm_flags_ptr)
+static int check_write_seal(unsigned long *vm_flags_ptr)
 {
-	vm_flags_t vm_flags = *vm_flags_ptr;
-	vm_flags_t mask = vm_flags & (VM_SHARED | VM_WRITE);
+	unsigned long vm_flags = *vm_flags_ptr;
+	unsigned long mask = vm_flags & (VM_SHARED | VM_WRITE);
 
 	/* If a private mapping then writability is irrelevant. */
 	if (!(mask & VM_SHARED))
@@ -368,7 +358,7 @@ static int check_write_seal(vm_flags_t *vm_flags_ptr)
 	return 0;
 }
 
-int memfd_check_seals_mmap(struct file *file, vm_flags_t *vm_flags_ptr)
+int memfd_check_seals_mmap(struct file *file, unsigned long *vm_flags_ptr)
 {
 	int err = 0;
 	unsigned int *seals_ptr = memfd_file_seals_ptr(file);
@@ -411,7 +401,7 @@ static char *alloc_name(const char __user *uname)
 	if (!name)
 		return ERR_PTR(-ENOMEM);
 
-	memcpy(name, MFD_NAME_PREFIX, MFD_NAME_PREFIX_LEN);
+	strcpy(name, MFD_NAME_PREFIX);
 	/* returned length does not include terminating zero */
 	len = strncpy_from_user(&name[MFD_NAME_PREFIX_LEN], uname, MFD_NAME_MAX_LEN + 1);
 	if (len < 0) {
@@ -485,22 +475,22 @@ SYSCALL_DEFINE2(memfd_create,
 	fd = get_unused_fd_flags((flags & MFD_CLOEXEC) ? O_CLOEXEC : 0);
 	if (fd < 0) {
 		error = fd;
-		goto err_free_name;
+		goto err_name;
 	}
 
 	file = alloc_file(name, flags);
 	if (IS_ERR(file)) {
 		error = PTR_ERR(file);
-		goto err_free_fd;
+		goto err_fd;
 	}
 
 	fd_install(fd, file);
 	kfree(name);
 	return fd;
 
-err_free_fd:
+err_fd:
 	put_unused_fd(fd);
-err_free_name:
+err_name:
 	kfree(name);
 	return error;
 }

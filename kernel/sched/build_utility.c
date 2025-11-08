@@ -80,10 +80,11 @@
 #include "wait_bit.c"
 #include "wait.c"
 
-#include "cpupri.c"
-#include "stop_task.c"
-
-#include "topology.c"
+#ifdef CONFIG_SMP
+# include "cpupri.c"
+# include "stop_task.c"
+# include "topology.c"
+#endif
 
 #ifdef CONFIG_SCHED_CORE
 # include "core_sched.c"

@@ -2448,7 +2448,7 @@ anx7625_audio_update_connector_status(struct anx7625_data *ctx,
 				      enum drm_connector_status status);
 
 static enum drm_connector_status
-anx7625_bridge_detect(struct drm_bridge *bridge, struct drm_connector *connector)
+anx7625_bridge_detect(struct drm_bridge *bridge)
 {
 	struct anx7625_data *ctx = bridge_to_anx7625(bridge);
 	struct device *dev = ctx->dev;
@@ -2596,6 +2596,7 @@ static int anx7625_link_bridge(struct drm_dp_aux *aux)
 		return ret;
 	}
 
+	platform->bridge.funcs = &anx7625_bridge_funcs;
 	platform->bridge.of_node = dev->of_node;
 	if (!anx7625_of_panel_on_aux_bus(dev))
 		platform->bridge.ops |= DRM_BRIDGE_OP_EDID;
@@ -2629,10 +2630,10 @@ static int anx7625_i2c_probe(struct i2c_client *client)
 		return -ENODEV;
 	}
 
-	platform = devm_drm_bridge_alloc(dev, struct anx7625_data, bridge, &anx7625_bridge_funcs);
-	if (IS_ERR(platform)) {
+	platform = devm_kzalloc(dev, sizeof(*platform), GFP_KERNEL);
+	if (!platform) {
 		DRM_DEV_ERROR(dev, "fail to allocate driver data\n");
-		return PTR_ERR(platform);
+		return -ENOMEM;
 	}
 
 	pdata = &platform->pdata;

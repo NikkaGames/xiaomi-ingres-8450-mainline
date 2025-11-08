@@ -202,8 +202,6 @@ struct dml2_core_mode_support_result {
 		} active;
 
 		unsigned int dispclk_khz;
-		unsigned int dpprefclk_khz;
-		unsigned int dtbrefclk_khz;
 		unsigned int dcfclk_deepsleep_khz;
 		unsigned int socclk_khz;
 
@@ -448,17 +446,13 @@ struct dml2_core_internal_state_intermediates {
 };
 
 struct dml2_core_mode_support_locals {
-	union {
-		struct dml2_core_calcs_mode_support_ex mode_support_ex_params;
-	};
+	struct dml2_core_calcs_mode_support_ex mode_support_ex_params;
 	struct dml2_display_cfg svp_expanded_display_cfg;
 	struct dml2_calculate_mcache_allocation_in_out calc_mcache_allocation_params;
 };
 
 struct dml2_core_mode_programming_locals {
-	union {
-		struct dml2_core_calcs_mode_programming_ex mode_programming_ex_params;
-	};
+	struct dml2_core_calcs_mode_programming_ex mode_programming_ex_params;
 	struct dml2_display_cfg svp_expanded_display_cfg;
 };
 

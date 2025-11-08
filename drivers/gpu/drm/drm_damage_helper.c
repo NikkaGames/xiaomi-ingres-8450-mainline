@@ -30,8 +30,6 @@
  *
  **************************************************************************/
 
-#include <linux/export.h>
-
 #include <drm/drm_atomic.h>
 #include <drm/drm_damage_helper.h>
 #include <drm/drm_device.h>

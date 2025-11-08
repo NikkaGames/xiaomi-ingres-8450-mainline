@@ -41,7 +41,6 @@ MODULE_PARM_DESC(log_ecn_error, "Log packets received with corrupted ECN");
 /* per-network namespace private data for this module */
 struct geneve_net {
 	struct list_head	geneve_list;
-	/* sock_list is protected by rtnl lock */
 	struct list_head	sock_list;
 };
 
@@ -922,8 +921,8 @@ static int geneve_xmit_skb(struct sk_buff *skb, struct net_device *dev,
 	udp_tunnel_xmit_skb(rt, gs4->sock->sk, skb, saddr, info->key.u.ipv4.dst,
 			    tos, ttl, df, sport, geneve->cfg.info.key.tp_dst,
 			    !net_eq(geneve->net, dev_net(geneve->dev)),
-			    !test_bit(IP_TUNNEL_CSUM_BIT, info->key.tun_flags),
-			    0);
+			    !test_bit(IP_TUNNEL_CSUM_BIT,
+				      info->key.tun_flags));
 	return 0;
 }
 
@@ -1015,8 +1014,7 @@ static int geneve6_xmit_skb(struct sk_buff *skb, struct net_device *dev,
 			     &saddr, &key->u.ipv6.dst, prio, ttl,
 			     info->key.label, sport, geneve->cfg.info.key.tp_dst,
 			     !test_bit(IP_TUNNEL_CSUM_BIT,
-				       info->key.tun_flags),
-			     0);
+				       info->key.tun_flags));
 	return 0;
 }
 #endif
@@ -1181,9 +1179,8 @@ static void geneve_offload_rx_ports(struct net_device *dev, bool push)
 	struct geneve_net *gn = net_generic(net, geneve_net_id);
 	struct geneve_sock *gs;
 
-	ASSERT_RTNL();
-
-	list_for_each_entry(gs, &gn->sock_list, list) {
+	rcu_read_lock();
+	list_for_each_entry_rcu(gs, &gn->sock_list, list) {
 		if (push) {
 			udp_tunnel_push_rx_port(dev, gs->sock,
 						UDP_TUNNEL_TYPE_GENEVE);
@@ -1192,6 +1189,7 @@ static void geneve_offload_rx_ports(struct net_device *dev, bool push)
 						UDP_TUNNEL_TYPE_GENEVE);
 		}
 	}
+	rcu_read_unlock();
 }
 
 /* Initialize the device structure. */

@@ -54,7 +54,6 @@ Library functionality that is used throughout the kernel.
    union_find
    min_heap
    parser
-   list
 
 Low level entry and exit
 ========================

@@ -1084,7 +1084,7 @@ static int alcor_pci_sdmmc_drv_probe(struct platform_device *pdev)
 	struct alcor_sdmmc_host *host;
 	int ret;
 
-	mmc = devm_mmc_alloc_host(&pdev->dev, sizeof(*host));
+	mmc = mmc_alloc_host(sizeof(*host), &pdev->dev);
 	if (!mmc) {
 		dev_err(&pdev->dev, "Can't allocate MMC\n");
 		return -ENOMEM;
@@ -1102,9 +1102,11 @@ static int alcor_pci_sdmmc_drv_probe(struct platform_device *pdev)
 	ret = devm_request_threaded_irq(&pdev->dev, priv->irq,
 			alcor_irq, alcor_irq_thread, IRQF_SHARED,
 			DRV_NAME_ALCOR_PCI_SDMMC, host);
-	if (ret)
-		return dev_err_probe(&pdev->dev, ret,
-				     "Failed to get irq for data line\n");
+
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to get irq for data line\n");
+		goto free_host;
+	}
 
 	mutex_init(&host->cmd_mutex);
 	INIT_DELAYED_WORK(&host->timeout_work, alcor_timeout_timer);
@@ -1113,8 +1115,15 @@ static int alcor_pci_sdmmc_drv_probe(struct platform_device *pdev)
 	alcor_hw_init(host);
 
 	dev_set_drvdata(&pdev->dev, host);
+	ret = mmc_add_host(mmc);
+	if (ret)
+		goto free_host;
 
-	return mmc_add_host(mmc);
+	return 0;
+
+free_host:
+	mmc_free_host(mmc);
+	return ret;
 }
 
 static void alcor_pci_sdmmc_drv_remove(struct platform_device *pdev)
@@ -1127,6 +1136,7 @@ static void alcor_pci_sdmmc_drv_remove(struct platform_device *pdev)
 
 	alcor_hw_uninit(host);
 	mmc_remove_host(mmc);
+	mmc_free_host(mmc);
 }
 
 #ifdef CONFIG_PM_SLEEP

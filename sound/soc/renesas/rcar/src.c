@@ -715,6 +715,7 @@ struct rsnd_mod *rsnd_src_mod_get(struct rsnd_priv *priv, int id)
 int rsnd_src_probe(struct rsnd_priv *priv)
 {
 	struct device_node *node;
+	struct device_node *np;
 	struct device *dev = rsnd_priv_to_dev(priv);
 	struct rsnd_src *src;
 	struct clk *clk;
@@ -741,13 +742,14 @@ int rsnd_src_probe(struct rsnd_priv *priv)
 	priv->src	= src;
 
 	i = 0;
-	for_each_child_of_node_scoped(node, np) {
+	for_each_child_of_node(node, np) {
 		if (!of_device_is_available(np))
 			goto skip;
 
 		i = rsnd_node_fixed_index(dev, np, SRC_NAME, i);
 		if (i < 0) {
 			ret = -EINVAL;
+			of_node_put(np);
 			goto rsnd_src_probe_done;
 		}
 
@@ -759,19 +761,23 @@ int rsnd_src_probe(struct rsnd_priv *priv)
 		src->irq = irq_of_parse_and_map(np, 0);
 		if (!src->irq) {
 			ret = -EINVAL;
+			of_node_put(np);
 			goto rsnd_src_probe_done;
 		}
 
 		clk = devm_clk_get(dev, name);
 		if (IS_ERR(clk)) {
 			ret = PTR_ERR(clk);
+			of_node_put(np);
 			goto rsnd_src_probe_done;
 		}
 
 		ret = rsnd_mod_init(priv, rsnd_mod_get(src),
 				    &rsnd_src_ops, clk, RSND_MOD_SRC, i);
-		if (ret)
+		if (ret) {
+			of_node_put(np);
 			goto rsnd_src_probe_done;
+		}
 
 skip:
 		i++;

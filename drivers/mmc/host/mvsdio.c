@@ -706,9 +706,11 @@ static int mvsd_probe(struct platform_device *pdev)
 	if (irq < 0)
 		return irq;
 
-	mmc = devm_mmc_alloc_host(&pdev->dev, sizeof(*host));
-	if (!mmc)
-		return -ENOMEM;
+	mmc = mmc_alloc_host(sizeof(struct mvsd_host), &pdev->dev);
+	if (!mmc) {
+		ret = -ENOMEM;
+		goto out;
+	}
 
 	host = mmc_priv(mmc);
 	host->mmc = mmc;
@@ -722,9 +724,11 @@ static int mvsd_probe(struct platform_device *pdev)
 	 * fixed rate clock).
 	 */
 	host->clk = devm_clk_get(&pdev->dev, NULL);
-	if (IS_ERR(host->clk))
-		return dev_err_probe(&pdev->dev, -EINVAL, "no clock associated\n");
-
+	if (IS_ERR(host->clk)) {
+		dev_err(&pdev->dev, "no clock associated\n");
+		ret = -EINVAL;
+		goto out;
+	}
 	clk_prepare_enable(host->clk);
 
 	mmc->ops = &mvsd_ops;
@@ -783,7 +787,12 @@ static int mvsd_probe(struct platform_device *pdev)
 	return 0;
 
 out:
-	clk_disable_unprepare(host->clk);
+	if (mmc) {
+		if (!IS_ERR(host->clk))
+			clk_disable_unprepare(host->clk);
+		mmc_free_host(mmc);
+	}
+
 	return ret;
 }
 
@@ -799,6 +808,7 @@ static void mvsd_remove(struct platform_device *pdev)
 
 	if (!IS_ERR(host->clk))
 		clk_disable_unprepare(host->clk);
+	mmc_free_host(mmc);
 }
 
 static const struct of_device_id mvsdio_dt_ids[] = {

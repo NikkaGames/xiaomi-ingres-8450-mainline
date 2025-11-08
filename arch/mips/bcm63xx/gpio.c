@@ -131,7 +131,7 @@ static struct gpio_chip bcm63xx_gpio_chip = {
 	.direction_input	= bcm63xx_gpio_direction_input,
 	.direction_output	= bcm63xx_gpio_direction_output,
 	.get			= bcm63xx_gpio_get,
-	.set			= bcm63xx_gpio_set,
+	.set_rv			= bcm63xx_gpio_set,
 	.base			= 0,
 };
 

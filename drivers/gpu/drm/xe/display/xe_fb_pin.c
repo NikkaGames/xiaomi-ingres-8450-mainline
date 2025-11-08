@@ -6,7 +6,6 @@
 #include <drm/ttm/ttm_bo.h>
 
 #include "i915_vma.h"
-#include "intel_display_core.h"
 #include "intel_display_types.h"
 #include "intel_dpt.h"
 #include "intel_fb.h"
@@ -24,7 +23,6 @@ write_dpt_rotated(struct xe_bo *bo, struct iosys_map *map, u32 *dpt_ofs, u32 bo_
 	struct xe_device *xe = xe_bo_device(bo);
 	struct xe_ggtt *ggtt = xe_device_get_root_tile(xe)->mem.ggtt;
 	u32 column, row;
-	u64 pte = xe_ggtt_encode_pte_flags(ggtt, bo, xe->pat.idx[XE_CACHE_NONE]);
 
 	/* TODO: Maybe rewrite so we can traverse the bo addresses sequentially,
 	 * by writing dpt/ggtt in a different order?
@@ -34,9 +32,10 @@ write_dpt_rotated(struct xe_bo *bo, struct iosys_map *map, u32 *dpt_ofs, u32 bo_
 		u32 src_idx = src_stride * (height - 1) + column + bo_ofs;
 
 		for (row = 0; row < height; row++) {
-			u64 addr = xe_bo_addr(bo, src_idx * XE_PAGE_SIZE, XE_PAGE_SIZE);
+			u64 pte = ggtt->pt_ops->pte_encode_bo(bo, src_idx * XE_PAGE_SIZE,
+							      xe->pat.idx[XE_CACHE_NONE]);
 
-			iosys_map_wr(map, *dpt_ofs, u64, pte | addr);
+			iosys_map_wr(map, *dpt_ofs, u64, pte);
 			*dpt_ofs += 8;
 			src_idx -= src_stride;
 		}
@@ -56,15 +55,17 @@ write_dpt_remapped(struct xe_bo *bo, struct iosys_map *map, u32 *dpt_ofs,
 {
 	struct xe_device *xe = xe_bo_device(bo);
 	struct xe_ggtt *ggtt = xe_device_get_root_tile(xe)->mem.ggtt;
+	u64 (*pte_encode_bo)(struct xe_bo *bo, u64 bo_offset, u16 pat_index)
+		= ggtt->pt_ops->pte_encode_bo;
 	u32 column, row;
-	u64 pte = xe_ggtt_encode_pte_flags(ggtt, bo, xe->pat.idx[XE_CACHE_NONE]);
 
 	for (row = 0; row < height; row++) {
 		u32 src_idx = src_stride * row + bo_ofs;
 
 		for (column = 0; column < width; column++) {
-			u64 addr = xe_bo_addr(bo, src_idx * XE_PAGE_SIZE, XE_PAGE_SIZE);
-			iosys_map_wr(map, *dpt_ofs, u64, pte | addr);
+			iosys_map_wr(map, *dpt_ofs, u64,
+				     pte_encode_bo(bo, src_idx * XE_PAGE_SIZE,
+				     xe->pat.idx[XE_CACHE_NONE]));
 
 			*dpt_ofs += 8;
 			src_idx++;
@@ -128,13 +129,13 @@ static int __xe_pin_fb_vma_dpt(const struct intel_framebuffer *fb,
 		return PTR_ERR(dpt);
 
 	if (view->type == I915_GTT_VIEW_NORMAL) {
-		u64 pte = xe_ggtt_encode_pte_flags(ggtt, bo, xe->pat.idx[XE_CACHE_NONE]);
 		u32 x;
 
 		for (x = 0; x < size / XE_PAGE_SIZE; x++) {
-			u64 addr = xe_bo_addr(bo, x * XE_PAGE_SIZE, XE_PAGE_SIZE);
+			u64 pte = ggtt->pt_ops->pte_encode_bo(bo, x * XE_PAGE_SIZE,
+							      xe->pat.idx[XE_CACHE_NONE]);
 
-			iosys_map_wr(&dpt->vmap, x * 8, u64, pte | addr);
+			iosys_map_wr(&dpt->vmap, x * 8, u64, pte);
 		}
 	} else if (view->type == I915_GTT_VIEW_REMAPPED) {
 		const struct intel_remapped_info *remap_info = &view->remapped;
@@ -175,15 +176,15 @@ write_ggtt_rotated(struct xe_bo *bo, struct xe_ggtt *ggtt, u32 *ggtt_ofs, u32 bo
 {
 	struct xe_device *xe = xe_bo_device(bo);
 	u32 column, row;
-	u64 pte = ggtt->pt_ops->pte_encode_flags(bo, xe->pat.idx[XE_CACHE_NONE]);
 
 	for (column = 0; column < width; column++) {
 		u32 src_idx = src_stride * (height - 1) + column + bo_ofs;
 
 		for (row = 0; row < height; row++) {
-			u64 addr = xe_bo_addr(bo, src_idx * XE_PAGE_SIZE, XE_PAGE_SIZE);
+			u64 pte = ggtt->pt_ops->pte_encode_bo(bo, src_idx * XE_PAGE_SIZE,
+							      xe->pat.idx[XE_CACHE_NONE]);
 
-			ggtt->pt_ops->ggtt_set_pte(ggtt, *ggtt_ofs, pte | addr);
+			ggtt->pt_ops->ggtt_set_pte(ggtt, *ggtt_ofs, pte);
 			*ggtt_ofs += XE_PAGE_SIZE;
 			src_idx -= src_stride;
 		}
@@ -201,15 +202,14 @@ static int __xe_pin_fb_vma_ggtt(const struct intel_framebuffer *fb,
 	struct drm_gem_object *obj = intel_fb_bo(&fb->base);
 	struct xe_bo *bo = gem_to_xe_bo(obj);
 	struct xe_device *xe = to_xe_device(fb->base.dev);
-	struct xe_tile *tile0 = xe_device_get_root_tile(xe);
-	struct xe_ggtt *ggtt = tile0->mem.ggtt;
+	struct xe_ggtt *ggtt = xe_device_get_root_tile(xe)->mem.ggtt;
 	u32 align;
 	int ret;
 
 	/* TODO: Consider sharing framebuffer mapping?
 	 * embed i915_vma inside intel_framebuffer
 	 */
-	xe_pm_runtime_get_noresume(xe);
+	xe_pm_runtime_get_noresume(tile_to_xe(ggtt->tile));
 	ret = mutex_lock_interruptible(&ggtt->lock);
 	if (ret)
 		goto out;
@@ -218,22 +218,29 @@ static int __xe_pin_fb_vma_ggtt(const struct intel_framebuffer *fb,
 	if (xe_bo_is_vram(bo) && ggtt->flags & XE_GGTT_FLAGS_64K)
 		align = max_t(u32, align, SZ_64K);
 
-	if (bo->ggtt_node[tile0->id] && view->type == I915_GTT_VIEW_NORMAL) {
-		vma->node = bo->ggtt_node[tile0->id];
+	if (bo->ggtt_node[ggtt->tile->id] && view->type == I915_GTT_VIEW_NORMAL) {
+		vma->node = bo->ggtt_node[ggtt->tile->id];
 	} else if (view->type == I915_GTT_VIEW_NORMAL) {
+		u32 x, size = bo->ttm.base.size;
+
 		vma->node = xe_ggtt_node_init(ggtt);
 		if (IS_ERR(vma->node)) {
 			ret = PTR_ERR(vma->node);
 			goto out_unlock;
 		}
 
-		ret = xe_ggtt_node_insert_locked(vma->node, xe_bo_size(bo), align, 0);
+		ret = xe_ggtt_node_insert_locked(vma->node, size, align, 0);
 		if (ret) {
 			xe_ggtt_node_fini(vma->node);
 			goto out_unlock;
 		}
 
-		xe_ggtt_map_bo(ggtt, vma->node, bo, xe->pat.idx[XE_CACHE_NONE]);
+		for (x = 0; x < size; x += XE_PAGE_SIZE) {
+			u64 pte = ggtt->pt_ops->pte_encode_bo(bo, x,
+							      xe->pat.idx[XE_CACHE_NONE]);
+
+			ggtt->pt_ops->ggtt_set_pte(ggtt, vma->node->base.start + x, pte);
+		}
 	} else {
 		u32 i, ggtt_ofs;
 		const struct intel_rotation_info *rot_info = &view->rotated;
@@ -267,7 +274,7 @@ static int __xe_pin_fb_vma_ggtt(const struct intel_framebuffer *fb,
 out_unlock:
 	mutex_unlock(&ggtt->lock);
 out:
-	xe_pm_runtime_put(xe);
+	xe_pm_runtime_put(tile_to_xe(ggtt->tile));
 	return ret;
 }
 
@@ -342,7 +349,7 @@ err:
 
 static void __xe_unpin_fb_vma(struct i915_vma *vma)
 {
-	u8 tile_id = xe_device_get_root_tile(xe_bo_device(vma->bo))->id;
+	u8 tile_id = vma->node->ggtt->tile->id;
 
 	if (!refcount_dec_and_test(&vma->ref))
 		return;
@@ -383,7 +390,6 @@ static bool reuse_vma(struct intel_plane_state *new_plane_state,
 {
 	struct intel_framebuffer *fb = to_intel_framebuffer(new_plane_state->hw.fb);
 	struct xe_device *xe = to_xe_device(fb->base.dev);
-	struct intel_display *display = xe->display;
 	struct i915_vma *vma;
 
 	if (old_plane_state->hw.fb == new_plane_state->hw.fb &&
@@ -394,8 +400,8 @@ static bool reuse_vma(struct intel_plane_state *new_plane_state,
 		goto found;
 	}
 
-	if (fb == intel_fbdev_framebuffer(display->fbdev.fbdev)) {
-		vma = intel_fbdev_vma_pointer(display->fbdev.fbdev);
+	if (fb == intel_fbdev_framebuffer(xe->display.fbdev.fbdev)) {
+		vma = intel_fbdev_vma_pointer(xe->display.fbdev.fbdev);
 		if (vma)
 			goto found;
 	}
@@ -457,9 +463,4 @@ void intel_dpt_destroy(struct i915_address_space *vm)
 u64 intel_dpt_offset(struct i915_vma *dpt_vma)
 {
 	return 0;
-}
-
-void intel_fb_get_map(struct i915_vma *vma, struct iosys_map *map)
-{
-	*map = vma->bo->vmap;
 }

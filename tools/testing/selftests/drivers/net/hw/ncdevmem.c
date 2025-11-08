@@ -526,10 +526,12 @@ static struct netdev_queue_id *create_queues(void)
 	struct netdev_queue_id *queues;
 	size_t i = 0;
 
-	queues = netdev_queue_id_alloc(num_queues);
+	queues = calloc(num_queues, sizeof(*queues));
 	for (i = 0; i < num_queues; i++) {
-		netdev_queue_id_set_type(&queues[i], NETDEV_QUEUE_TYPE_RX);
-		netdev_queue_id_set_id(&queues[i], start_queue + i);
+		queues[i]._present.type = 1;
+		queues[i]._present.id = 1;
+		queues[i].type = NETDEV_QUEUE_TYPE_RX;
+		queues[i].id = start_queue + i;
 	}
 
 	return queues;
@@ -850,6 +852,7 @@ static int do_client(struct memory_buffer *mem)
 	ssize_t line_size = 0;
 	struct cmsghdr *cmsg;
 	char *line = NULL;
+	unsigned long mid;
 	size_t len = 0;
 	int socket_fd;
 	__u32 ddmabuf;

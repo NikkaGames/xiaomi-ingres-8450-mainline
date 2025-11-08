@@ -73,7 +73,9 @@ properties:
     description: |
       Indicates that the device state has changed.
 
-  monitored-battery: true
+  monitored-battery:
+    $ref: /schemas/types.yaml#/definitions/phandle
+    description: phandle to the battery node being monitored
 
 required:
   - compatible

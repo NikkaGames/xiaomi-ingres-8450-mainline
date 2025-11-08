@@ -8,15 +8,8 @@
  * Author: Boris Brezillon <boris.brezillon@free-electrons.com>
  */
 
-#include <linux/bits.h>
-#include <linux/err.h>
-#include <linux/export.h>
-#include <linux/mod_devicetable.h>
-#include <linux/of.h>
-#include <linux/regmap.h>
-#include <linux/string.h>
-
 #include <linux/mfd/syscon/atmel-smc.h>
+#include <linux/string.h>
 
 /**
  * atmel_smc_cs_conf_init - initialize a SMC CS conf

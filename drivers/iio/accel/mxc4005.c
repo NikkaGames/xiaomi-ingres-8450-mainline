@@ -19,6 +19,8 @@
 #include <linux/iio/trigger_consumer.h>
 
 #define MXC4005_DRV_NAME		"mxc4005"
+#define MXC4005_IRQ_NAME		"mxc4005_event"
+#define MXC4005_REGMAP_NAME		"mxc4005_regmap"
 
 #define MXC4005_REG_XOUT_UPPER		0x03
 #define MXC4005_REG_XOUT_LOWER		0x04
@@ -136,7 +138,7 @@ static bool mxc4005_is_writeable_reg(struct device *dev, unsigned int reg)
 }
 
 static const struct regmap_config mxc4005_regmap_config = {
-	.name = "mxc4005_regmap",
+	.name = MXC4005_REGMAP_NAME,
 
 	.reg_bits = 8,
 	.val_bits = 8,
@@ -491,7 +493,7 @@ static int mxc4005_probe(struct i2c_client *client)
 						NULL,
 						IRQF_TRIGGER_FALLING |
 						IRQF_ONESHOT,
-						"mxc4005_event",
+						MXC4005_IRQ_NAME,
 						data->dready_trig);
 		if (ret) {
 			dev_err(&client->dev,

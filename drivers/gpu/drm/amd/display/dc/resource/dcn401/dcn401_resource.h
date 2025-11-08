@@ -24,7 +24,7 @@ enum dc_status dcn401_patch_unknown_plane_state(struct dc_plane_state *plane_sta
 
 enum dc_status dcn401_validate_bandwidth(struct dc *dc,
 		struct dc_state *context,
-		enum dc_validate_mode validate_mode);
+		bool fast_validate);
 
 void dcn401_prepare_mcache_programming(struct dc *dc, struct dc_state *context);
 

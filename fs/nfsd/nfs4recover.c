@@ -950,32 +950,38 @@ static const struct rpc_pipe_ops cld_upcall_ops = {
 	.destroy_msg	= cld_pipe_destroy_msg,
 };
 
-static int
+static struct dentry *
 nfsd4_cld_register_sb(struct super_block *sb, struct rpc_pipe *pipe)
 {
-	struct dentry *dir;
-	int err;
+	struct dentry *dir, *dentry;
 
 	dir = rpc_d_lookup_sb(sb, NFSD_PIPE_DIR);
 	if (dir == NULL)
-		return -ENOENT;
-	err = rpc_mkpipe_dentry(dir, NFSD_CLD_PIPE, NULL, pipe);
+		return ERR_PTR(-ENOENT);
+	dentry = rpc_mkpipe_dentry(dir, NFSD_CLD_PIPE, NULL, pipe);
 	dput(dir);
-	return err;
+	return dentry;
 }
 
-static int
+static void
+nfsd4_cld_unregister_sb(struct rpc_pipe *pipe)
+{
+	if (pipe->dentry)
+		rpc_unlink(pipe->dentry);
+}
+
+static struct dentry *
 nfsd4_cld_register_net(struct net *net, struct rpc_pipe *pipe)
 {
 	struct super_block *sb;
-	int err;
+	struct dentry *dentry;
 
 	sb = rpc_get_sb_net(net);
 	if (!sb)
-		return 0;
-	err = nfsd4_cld_register_sb(sb, pipe);
+		return NULL;
+	dentry = nfsd4_cld_register_sb(sb, pipe);
 	rpc_put_sb_net(net);
-	return err;
+	return dentry;
 }
 
 static void
@@ -985,7 +991,7 @@ nfsd4_cld_unregister_net(struct net *net, struct rpc_pipe *pipe)
 
 	sb = rpc_get_sb_net(net);
 	if (sb) {
-		rpc_unlink(pipe);
+		nfsd4_cld_unregister_sb(pipe);
 		rpc_put_sb_net(net);
 	}
 }
@@ -995,6 +1001,7 @@ static int
 __nfsd4_init_cld_pipe(struct net *net)
 {
 	int ret;
+	struct dentry *dentry;
 	struct nfsd_net *nn = net_generic(net, nfsd_net_id);
 	struct cld_net *cn;
 
@@ -1015,10 +1022,13 @@ __nfsd4_init_cld_pipe(struct net *net)
 	spin_lock_init(&cn->cn_lock);
 	INIT_LIST_HEAD(&cn->cn_list);
 
-	ret = nfsd4_cld_register_net(net, cn->cn_pipe);
-	if (unlikely(ret))
+	dentry = nfsd4_cld_register_net(net, cn->cn_pipe);
+	if (IS_ERR(dentry)) {
+		ret = PTR_ERR(dentry);
 		goto err_destroy_data;
+	}
 
+	cn->cn_pipe->dentry = dentry;
 #ifdef CONFIG_NFSD_LEGACY_CLIENT_TRACKING
 	cn->cn_has_legacy = false;
 #endif
@@ -2111,6 +2121,7 @@ rpc_pipefs_event(struct notifier_block *nb, unsigned long event, void *ptr)
 	struct net *net = sb->s_fs_info;
 	struct nfsd_net *nn = net_generic(net, nfsd_net_id);
 	struct cld_net *cn = nn->cld_net;
+	struct dentry *dentry;
 	int ret = 0;
 
 	if (!try_module_get(THIS_MODULE))
@@ -2123,10 +2134,16 @@ rpc_pipefs_event(struct notifier_block *nb, unsigned long event, void *ptr)
 
 	switch (event) {
 	case RPC_PIPEFS_MOUNT:
-		ret = nfsd4_cld_register_sb(sb, cn->cn_pipe);
+		dentry = nfsd4_cld_register_sb(sb, cn->cn_pipe);
+		if (IS_ERR(dentry)) {
+			ret = PTR_ERR(dentry);
+			break;
+		}
+		cn->cn_pipe->dentry = dentry;
 		break;
 	case RPC_PIPEFS_UMOUNT:
-		rpc_unlink(cn->cn_pipe);
+		if (cn->cn_pipe->dentry)
+			nfsd4_cld_unregister_sb(cn->cn_pipe);
 		break;
 	default:
 		ret = -ENOTSUPP;

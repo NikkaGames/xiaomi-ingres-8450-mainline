@@ -399,6 +399,7 @@ int create_pagecache_thp_and_fd(const char *testfile, size_t fd_size, int *fd,
 		char **addr)
 {
 	size_t i;
+	int dummy = 0;
 	unsigned char buf[1024];
 
 	srand(time(NULL));
@@ -439,11 +440,9 @@ int create_pagecache_thp_and_fd(const char *testfile, size_t fd_size, int *fd,
 	}
 	madvise(*addr, fd_size, MADV_HUGEPAGE);
 
-	for (size_t i = 0; i < fd_size; i++) {
-		char *addr2 = *addr + i;
-
-		FORCE_READ(*addr2);
-	}
+	for (size_t i = 0; i < fd_size; i++)
+		dummy += *(*addr + i);
+	asm volatile("" : "+r" (dummy));
 
 	if (!check_huge_file(*addr, fd_size / pmd_pagesize, pmd_pagesize)) {
 		ksft_print_msg("No large pagecache folio generated, please provide a filesystem supporting large folio\n");

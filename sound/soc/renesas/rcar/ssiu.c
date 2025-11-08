@@ -478,14 +478,17 @@ void rsnd_parse_connect_ssiu(struct rsnd_dai *rdai,
 
 	/* use rcar_sound,ssiu if exist */
 	if (node) {
+		struct device_node *np;
 		int i = 0;
 
-		for_each_child_of_node_scoped(node, np) {
+		for_each_child_of_node(node, np) {
 			struct rsnd_mod *mod;
 
 			i = rsnd_node_fixed_index(dev, np, SSIU_NAME, i);
-			if (i < 0)
+			if (i < 0) {
+				of_node_put(np);
 				break;
+			}
 
 			mod = rsnd_ssiu_mod_get(priv, i);
 

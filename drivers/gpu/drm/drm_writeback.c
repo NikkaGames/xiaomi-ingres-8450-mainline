@@ -10,7 +10,6 @@
  */
 
 #include <linux/dma-fence.h>
-#include <linux/export.h>
 
 #include <drm/drm_crtc.h>
 #include <drm/drm_device.h>

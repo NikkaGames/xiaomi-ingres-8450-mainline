@@ -329,14 +329,11 @@ int btrfs_insert_one_raid_extent(struct btrfs_trans_handle *trans,
 
 	ret = btrfs_insert_item(trans, stripe_root, &stripe_key, stripe_extent,
 				item_size);
-	if (ret == -EEXIST) {
+	if (ret == -EEXIST)
 		ret = update_raid_extent_item(trans, &stripe_key, stripe_extent,
 					      item_size);
-		if (ret)
-			btrfs_abort_transaction(trans, ret);
-	} else if (ret) {
+	if (ret)
 		btrfs_abort_transaction(trans, ret);
-	}
 
 	kfree(stripe_extent);
 

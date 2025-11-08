@@ -13,11 +13,12 @@
  * Update the vDSO data page to keep in sync with kernel timekeeping.
  */
 static __always_inline
-void __arch_update_vdso_clock(struct vdso_clock *vc)
+void __arm64_update_vsyscall(struct vdso_time_data *vdata)
 {
-	vc->mask	= VDSO_PRECISION_MASK;
+	vdata->clock_data[CS_HRES_COARSE].mask	= VDSO_PRECISION_MASK;
+	vdata->clock_data[CS_RAW].mask		= VDSO_PRECISION_MASK;
 }
-#define __arch_update_vdso_clock __arch_update_vdso_clock
+#define __arch_update_vsyscall __arm64_update_vsyscall
 
 /* The asm-generic header needs to be included after the definitions above */
 #include <asm-generic/vdso/vsyscall.h>

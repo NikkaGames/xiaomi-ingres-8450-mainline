@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # perf stat --bpf-counters test (exclusive)
 # SPDX-License-Identifier: GPL-2.0
 

@@ -14,6 +14,9 @@ use crate::{
 #[cfg(CONFIG_CPUMASK_OFFSTACK)]
 use core::ptr::{self, NonNull};
 
+#[cfg(not(CONFIG_CPUMASK_OFFSTACK))]
+use core::mem::MaybeUninit;
+
 use core::ops::{Deref, DerefMut};
 
 /// A CPU Mask.
@@ -27,7 +30,7 @@ use core::ops::{Deref, DerefMut};
 /// The callers must ensure that the `struct cpumask` is valid for access and
 /// remains valid for the lifetime of the returned reference.
 ///
-/// # Examples
+/// ## Examples
 ///
 /// The following example demonstrates how to update a [`Cpumask`].
 ///
@@ -172,7 +175,7 @@ impl Cpumask {
 /// The callers must ensure that the `struct cpumask_var_t` is valid for access and remains valid
 /// for the lifetime of [`CpumaskVar`].
 ///
-/// # Examples
+/// ## Examples
 ///
 /// The following example demonstrates how to create and update a [`CpumaskVar`].
 ///
@@ -236,7 +239,10 @@ impl CpumaskVar {
             },
 
             #[cfg(not(CONFIG_CPUMASK_OFFSTACK))]
-            mask: Cpumask(Opaque::zeroed()),
+            // SAFETY: FFI type is valid to be zero-initialized.
+            //
+            // INVARIANT: The associated memory is freed when the `CpumaskVar` goes out of scope.
+            mask: unsafe { core::mem::zeroed() },
         })
     }
 
@@ -260,7 +266,10 @@ impl CpumaskVar {
                 NonNull::new(ptr.cast()).ok_or(AllocError)?
             },
             #[cfg(not(CONFIG_CPUMASK_OFFSTACK))]
-            mask: Cpumask(Opaque::uninit()),
+            // SAFETY: Guaranteed by the safety requirements of the function.
+            //
+            // INVARIANT: The associated memory is freed when the `CpumaskVar` goes out of scope.
+            mask: unsafe { MaybeUninit::uninit().assume_init() },
         })
     }
 

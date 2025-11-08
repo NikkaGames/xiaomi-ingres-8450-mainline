@@ -43,8 +43,8 @@
  * alias.
  */
 #define MODULE_ALIAS_CRYPTO(name)	\
-		MODULE_INFO(alias, name);	\
-		MODULE_INFO(alias, "crypto-" name)
+		__MODULE_INFO(alias, alias_userspace, name);	\
+		__MODULE_INFO(alias, alias_crypto, "crypto-" name)
 
 struct crypto_aead;
 struct crypto_instance;

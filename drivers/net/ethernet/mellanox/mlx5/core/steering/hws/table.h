@@ -18,7 +18,6 @@ struct mlx5hws_table {
 	enum mlx5hws_table_type type;
 	u32 fw_ft_type;
 	u32 level;
-	u16 uid;
 	struct list_head matchers_list;
 	struct list_head tbl_list_node;
 	struct mlx5hws_default_miss default_miss;
@@ -48,7 +47,7 @@ u32 mlx5hws_table_get_res_fw_ft_type(enum mlx5hws_table_type tbl_type,
 
 int mlx5hws_table_create_default_ft(struct mlx5_core_dev *mdev,
 				    struct mlx5hws_table *tbl,
-				    u16 uid, u32 *ft_id);
+				    u32 *ft_id);
 
 void mlx5hws_table_destroy_default_ft(struct mlx5hws_table *tbl,
 				      u32 ft_id);

@@ -90,6 +90,8 @@ static int speyside_set_bias_level_post(struct snd_soc_card *card,
 		break;
 	}
 
+	card->dapm.bias_level = level;
+
 	return 0;
 }
 

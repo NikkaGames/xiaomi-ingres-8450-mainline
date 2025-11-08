@@ -118,17 +118,20 @@ static void fpc202_set_enable(struct fpc202_priv *priv, int enable)
 	gpiod_set_value(priv->en_gpio, enable);
 }
 
-static int fpc202_gpio_set(struct gpio_chip *chip, unsigned int offset,
-			   int value)
+static void fpc202_gpio_set(struct gpio_chip *chip, unsigned int offset,
+			    int value)
 {
 	struct fpc202_priv *priv = gpiochip_get_data(chip);
 	int ret;
 	u8 val;
 
+	if (fpc202_gpio_get_dir(offset) == GPIO_LINE_DIRECTION_IN)
+		return;
+
 	ret = fpc202_read(priv, FPC202_REG_OUT_A_OUT_B_VAL);
 	if (ret < 0) {
 		dev_err(&priv->client->dev, "Failed to set GPIO %d value! err %d\n", offset, ret);
-		return ret;
+		return;
 	}
 
 	val = (u8)ret;
@@ -138,7 +141,7 @@ static int fpc202_gpio_set(struct gpio_chip *chip, unsigned int offset,
 	else
 		val &= ~BIT(offset - FPC202_GPIO_P0_S0_OUT_A);
 
-	return fpc202_write(priv, FPC202_REG_OUT_A_OUT_B_VAL, val);
+	fpc202_write(priv, FPC202_REG_OUT_A_OUT_B_VAL, val);
 }
 
 static int fpc202_gpio_get(struct gpio_chip *chip, unsigned int offset)
@@ -281,7 +284,7 @@ static int fpc202_probe_port(struct fpc202_priv *priv, struct device_node *i2c_h
 
 	desc.chan_id = port_id;
 	desc.parent = dev;
-	desc.bus_handle = of_fwnode_handle(i2c_handle);
+	desc.bus_handle = of_node_to_fwnode(i2c_handle);
 	desc.num_aliases = FPC202_ALIASES_PER_PORT;
 
 	fpc202_fill_alias_table(priv->client, aliases, port_id);

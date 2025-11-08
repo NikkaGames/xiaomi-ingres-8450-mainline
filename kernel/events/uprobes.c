@@ -436,7 +436,8 @@ static int __uprobe_write_opcode(struct vm_area_struct *vma,
 	 * there are no unexpected folio references ...
 	 */
 	if (is_register || userfaultfd_missing(vma) ||
-	    (folio_ref_count(folio) != folio_expected_ref_count(folio) + 1))
+	    (folio_ref_count(folio) != folio_mapcount(folio) + 1 +
+	     folio_test_swapcache(folio) * folio_nr_pages(folio)))
 		goto remap;
 
 	/*
@@ -539,7 +540,7 @@ retry:
 	}
 
 	ret = 0;
-	if (unlikely(!folio_test_anon(folio) || folio_is_zone_device(folio))) {
+	if (unlikely(!folio_test_anon(folio))) {
 		VM_WARN_ON_ONCE(is_register);
 		folio_put(folio);
 		goto out;
@@ -580,8 +581,8 @@ retry:
 
 out:
 	/* Revert back reference counter if instruction update failed. */
-	if (ret < 0 && ref_ctr_updated)
-		update_ref_ctr(uprobe, mm, is_register ? -1 : 1);
+	if (ret < 0 && is_register && ref_ctr_updated)
+		update_ref_ctr(uprobe, mm, -1);
 
 	/* try collapse pmd for compound page */
 	if (ret > 0)

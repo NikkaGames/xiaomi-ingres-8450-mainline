@@ -905,8 +905,7 @@ static int do_dump(int argc, char **argv)
 			return -1;
 		}
 
-		fd = map_parse_fd_and_info(&argc, &argv, &info, &len,
-					   BPF_F_RDONLY);
+		fd = map_parse_fd_and_info(&argc, &argv, &info, &len);
 		if (fd < 0)
 			return -1;
 
@@ -1119,12 +1118,9 @@ build_btf_type_table(struct hashmap *tab, enum bpf_obj_type type,
 		[BPF_OBJ_PROG]		= "prog",
 		[BPF_OBJ_MAP]		= "map",
 	};
-	LIBBPF_OPTS(bpf_get_fd_by_id_opts, opts_ro);
 	__u32 btf_id, id = 0;
 	int err;
 	int fd;
-
-	opts_ro.open_flags = BPF_F_RDONLY;
 
 	while (true) {
 		switch (type) {
@@ -1155,7 +1151,7 @@ build_btf_type_table(struct hashmap *tab, enum bpf_obj_type type,
 			fd = bpf_prog_get_fd_by_id(id);
 			break;
 		case BPF_OBJ_MAP:
-			fd = bpf_map_get_fd_by_id_opts(id, &opts_ro);
+			fd = bpf_map_get_fd_by_id(id);
 			break;
 		default:
 			err = -1;

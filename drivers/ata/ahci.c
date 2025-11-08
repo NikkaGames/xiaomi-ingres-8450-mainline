@@ -110,17 +110,17 @@ static const struct scsi_host_template ahci_sht = {
 
 static struct ata_port_operations ahci_vt8251_ops = {
 	.inherits		= &ahci_ops,
-	.reset.hardreset	= ahci_vt8251_hardreset,
+	.hardreset		= ahci_vt8251_hardreset,
 };
 
 static struct ata_port_operations ahci_p5wdh_ops = {
 	.inherits		= &ahci_ops,
-	.reset.hardreset	= ahci_p5wdh_hardreset,
+	.hardreset		= ahci_p5wdh_hardreset,
 };
 
 static struct ata_port_operations ahci_avn_ops = {
 	.inherits		= &ahci_ops,
-	.reset.hardreset	= ahci_avn_hardreset,
+	.hardreset		= ahci_avn_hardreset,
 };
 
 static const struct ata_port_info ahci_port_info[] = {
@@ -674,9 +674,7 @@ MODULE_PARM_DESC(marvell_enable, "Marvell SATA via AHCI (1 = enabled)");
 
 static int mobile_lpm_policy = -1;
 module_param(mobile_lpm_policy, int, 0644);
-MODULE_PARM_DESC(mobile_lpm_policy,
-		 "Default LPM policy. Despite its name, this parameter applies "
-		 "to all chipsets, including desktop and server chipsets");
+MODULE_PARM_DESC(mobile_lpm_policy, "Default LPM policy for mobile chipsets");
 
 static char *ahci_mask_port_map;
 module_param_named(mask_port_map, ahci_mask_port_map, charp, 0444);
@@ -689,50 +687,40 @@ MODULE_PARM_DESC(mask_port_map,
 		 "where <pci_dev> is the PCI ID of an AHCI controller in the "
 		 "form \"domain:bus:dev.func\"");
 
-static char *ahci_mask_port_ext;
-module_param_named(mask_port_ext, ahci_mask_port_ext, charp, 0444);
-MODULE_PARM_DESC(mask_port_ext,
-		 "32-bits mask to ignore the external/hotplug capability of ports. "
-		 "Valid values are: "
-		 "\"<mask>\" to apply the same mask to all AHCI controller "
-		 "devices, and \"<pci_dev>=<mask>,<pci_dev>=<mask>,...\" to "
-		 "specify different masks for the controllers specified, "
-		 "where <pci_dev> is the PCI ID of an AHCI controller in the "
-		 "form \"domain:bus:dev.func\"");
-
-static u32 ahci_port_mask(struct device *dev, char *mask_s)
+static void ahci_apply_port_map_mask(struct device *dev,
+				     struct ahci_host_priv *hpriv, char *mask_s)
 {
 	unsigned int mask;
 
 	if (kstrtouint(mask_s, 0, &mask)) {
 		dev_err(dev, "Invalid port map mask\n");
-		return 0;
+		return;
 	}
 
-	return mask;
+	hpriv->mask_port_map = mask;
 }
 
-static u32 ahci_get_port_mask(struct device *dev, char *mask_p)
+static void ahci_get_port_map_mask(struct device *dev,
+				   struct ahci_host_priv *hpriv)
 {
 	char *param, *end, *str, *mask_s;
 	char *name;
-	u32 mask = 0;
 
-	if (!mask_p || !strlen(mask_p))
-		return 0;
+	if (!strlen(ahci_mask_port_map))
+		return;
 
-	str = kstrdup(mask_p, GFP_KERNEL);
+	str = kstrdup(ahci_mask_port_map, GFP_KERNEL);
 	if (!str)
-		return 0;
+		return;
 
 	/* Handle single mask case */
 	if (!strchr(str, '=')) {
-		mask = ahci_port_mask(dev, str);
+		ahci_apply_port_map_mask(dev, hpriv, str);
 		goto free;
 	}
 
 	/*
-	 * Mask list case: parse the parameter to get the mask only if
+	 * Mask list case: parse the parameter to apply the mask only if
 	 * the device name matches.
 	 */
 	param = str;
@@ -762,13 +750,11 @@ static u32 ahci_get_port_mask(struct device *dev, char *mask_p)
 			param++;
 		}
 
-		mask = ahci_port_mask(dev, mask_s);
+		ahci_apply_port_map_mask(dev, hpriv, mask_s);
 	}
 
 free:
 	kfree(str);
-
-	return mask;
 }
 
 static void ahci_pci_save_initial_config(struct pci_dev *pdev,
@@ -794,10 +780,8 @@ static void ahci_pci_save_initial_config(struct pci_dev *pdev,
 	}
 
 	/* Handle port map masks passed as module parameter. */
-	hpriv->mask_port_map =
-		ahci_get_port_mask(&pdev->dev, ahci_mask_port_map);
-	hpriv->mask_port_ext =
-		ahci_get_port_mask(&pdev->dev, ahci_mask_port_ext);
+	if (ahci_mask_port_map)
+		ahci_get_port_map_mask(&pdev->dev, hpriv);
 
 	ahci_save_initial_config(&pdev->dev, hpriv);
 }
@@ -1771,20 +1755,11 @@ static void ahci_mark_external_port(struct ata_port *ap)
 	void __iomem *port_mmio = ahci_port_base(ap);
 	u32 tmp;
 
-	/*
-	 * Mark external ports (hotplug-capable, eSATA), unless we were asked to
-	 * ignore this feature.
-	 */
+	/* mark external ports (hotplug-capable, eSATA) */
 	tmp = readl(port_mmio + PORT_CMD);
 	if (((tmp & PORT_CMD_ESP) && (hpriv->cap & HOST_CAP_SXS)) ||
-	    (tmp & PORT_CMD_HPCP)) {
-		if (hpriv->mask_port_ext & (1U << ap->port_no)) {
-			ata_port_info(ap,
-				"Ignoring external/hotplug capability\n");
-			return;
-		}
+	    (tmp & PORT_CMD_HPCP))
 		ap->pflags |= ATA_PFLAG_EXTERNAL;
-	}
 }
 
 static void ahci_update_initial_lpm_policy(struct ata_port *ap)
@@ -1799,26 +1774,15 @@ static void ahci_update_initial_lpm_policy(struct ata_port *ap)
 	 * LPM if the port advertises itself as an external port.
 	 */
 	if (ap->pflags & ATA_PFLAG_EXTERNAL) {
-		ap->flags |= ATA_FLAG_NO_LPM;
-		ap->target_lpm_policy = ATA_LPM_MAX_POWER;
+		ata_port_dbg(ap, "external port, not enabling LPM\n");
 		return;
-	}
-
-	/* If no Partial or no Slumber, we cannot support DIPM. */
-	if ((ap->host->flags & ATA_HOST_NO_PART) ||
-	    (ap->host->flags & ATA_HOST_NO_SSC)) {
-		ata_port_dbg(ap, "Host does not support DIPM\n");
-		ap->flags |= ATA_FLAG_NO_DIPM;
 	}
 
 	/* If no LPM states are supported by the HBA, do not bother with LPM */
 	if ((ap->host->flags & ATA_HOST_NO_PART) &&
 	    (ap->host->flags & ATA_HOST_NO_SSC) &&
 	    (ap->host->flags & ATA_HOST_NO_DEVSLP)) {
-		ata_port_dbg(ap,
-			"No LPM states supported, forcing LPM max_power\n");
-		ap->flags |= ATA_FLAG_NO_LPM;
-		ap->target_lpm_policy = ATA_LPM_MAX_POWER;
+		ata_port_dbg(ap, "no LPM states supported, not enabling LPM\n");
 		return;
 	}
 

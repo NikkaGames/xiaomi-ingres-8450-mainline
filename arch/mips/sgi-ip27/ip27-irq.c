@@ -165,7 +165,7 @@ static void hub_domain_free(struct irq_domain *domain,
 		return;
 
 	irqd = irq_domain_get_irq_data(domain, virq);
-	if (irqd)
+	if (irqd && irqd->chip_data)
 		kfree(irqd->chip_data);
 }
 

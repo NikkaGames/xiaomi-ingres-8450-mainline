@@ -42,6 +42,7 @@ required:
   - compatible
   - port
   - reg
+  - reset-gpios
 
 additionalProperties: false
 

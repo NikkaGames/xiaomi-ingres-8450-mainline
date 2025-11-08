@@ -8,7 +8,6 @@
 #include "gem/i915_gem_object.h"
 
 #include "i915_drv.h"
-#include "intel_display_core.h"
 #include "intel_display_types.h"
 #include "intel_fb.h"
 #include "intel_fb_bo.h"

@@ -6,7 +6,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/string.h>
 
 MODULE_AUTHOR("Giuliano Pochini <pochini@shiny.it>");
 MODULE_LICENSE("GPL v2");
@@ -917,7 +916,7 @@ static int snd_echo_new_pcm(struct echoaudio *chip)
 		return err;
 	pcm->private_data = chip;
 	chip->analog_pcm = pcm;
-	strscpy(pcm->name, chip->card->shortname);
+	strcpy(pcm->name, chip->card->shortname);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &analog_playback_ops);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &analog_capture_ops);
 	snd_echo_preallocate_pages(pcm, &chip->pci->dev);
@@ -930,7 +929,7 @@ static int snd_echo_new_pcm(struct echoaudio *chip)
 		return err;
 	pcm->private_data = chip;
 	chip->digital_pcm = pcm;
-	strscpy(pcm->name, chip->card->shortname);
+	strcpy(pcm->name, chip->card->shortname);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &digital_capture_ops);
 	snd_echo_preallocate_pages(pcm, &chip->pci->dev);
 #endif /* ECHOCARD_HAS_DIGITAL_IO */
@@ -950,7 +949,7 @@ static int snd_echo_new_pcm(struct echoaudio *chip)
 		return err;
 	pcm->private_data = chip;
 	chip->analog_pcm = pcm;
-	strscpy(pcm->name, chip->card->shortname);
+	strcpy(pcm->name, chip->card->shortname);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &analog_playback_ops);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &analog_capture_ops);
 	snd_echo_preallocate_pages(pcm, &chip->pci->dev);
@@ -964,7 +963,7 @@ static int snd_echo_new_pcm(struct echoaudio *chip)
 		return err;
 	pcm->private_data = chip;
 	chip->digital_pcm = pcm;
-	strscpy(pcm->name, chip->card->shortname);
+	strcpy(pcm->name, chip->card->shortname);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &digital_playback_ops);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &digital_capture_ops);
 	snd_echo_preallocate_pages(pcm, &chip->pci->dev);
@@ -1986,8 +1985,8 @@ static int __snd_echo_probe(struct pci_dev *pci,
 	if (err < 0)
 		return err;
 
-	strscpy(card->driver, "Echo_" ECHOCARD_NAME);
-	strscpy(card->shortname, chip->card_name);
+	strcpy(card->driver, "Echo_" ECHOCARD_NAME);
+	strcpy(card->shortname, chip->card_name);
 
 	dsp = "56301";
 	if (pci_id->device == 0x3410)

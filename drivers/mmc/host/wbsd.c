@@ -1190,7 +1190,7 @@ static int wbsd_alloc_mmc(struct device *dev)
 	/*
 	 * Allocate MMC structure.
 	 */
-	mmc = devm_mmc_alloc_host(dev, sizeof(*host));
+	mmc = mmc_alloc_host(sizeof(struct wbsd_host), dev);
 	if (!mmc)
 		return -ENOMEM;
 
@@ -1262,6 +1262,8 @@ static void wbsd_free_mmc(struct device *dev)
 	BUG_ON(host == NULL);
 
 	timer_delete_sync(&host->ignore_timer);
+
+	mmc_free_host(mmc);
 }
 
 /*

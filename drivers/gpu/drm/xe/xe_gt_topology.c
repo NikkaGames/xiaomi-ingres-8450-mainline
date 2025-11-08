@@ -12,20 +12,23 @@
 #include "regs/xe_gt_regs.h"
 #include "xe_assert.h"
 #include "xe_gt.h"
-#include "xe_gt_printk.h"
 #include "xe_mmio.h"
 #include "xe_wa.h"
 
-static void load_dss_mask(struct xe_gt *gt, xe_dss_mask_t mask, int numregs,
-			  const struct xe_reg regs[])
+static void
+load_dss_mask(struct xe_gt *gt, xe_dss_mask_t mask, int numregs, ...)
 {
+	va_list argp;
 	u32 fuse_val[XE_MAX_DSS_FUSE_REGS] = {};
 	int i;
 
-	xe_gt_assert(gt, numregs <= ARRAY_SIZE(fuse_val));
+	if (drm_WARN_ON(&gt_to_xe(gt)->drm, numregs > XE_MAX_DSS_FUSE_REGS))
+		numregs = XE_MAX_DSS_FUSE_REGS;
 
+	va_start(argp, numregs);
 	for (i = 0; i < numregs; i++)
-		fuse_val[i] = xe_mmio_read32(&gt->mmio, regs[i]);
+		fuse_val[i] = xe_mmio_read32(&gt->mmio, va_arg(argp, struct xe_reg));
+	va_end(argp);
 
 	bitmap_from_arr32(mask, fuse_val, numregs * 32);
 }
@@ -215,19 +218,9 @@ get_num_dss_regs(struct xe_device *xe, int *geometry_regs, int *compute_regs)
 void
 xe_gt_topology_init(struct xe_gt *gt)
 {
-	static const struct xe_reg geometry_regs[] = {
-		XELP_GT_GEOMETRY_DSS_ENABLE,
-		XE2_GT_GEOMETRY_DSS_1,
-		XE2_GT_GEOMETRY_DSS_2,
-	};
-	static const struct xe_reg compute_regs[] = {
-		XEHP_GT_COMPUTE_DSS_ENABLE,
-		XEHPC_GT_COMPUTE_DSS_ENABLE_EXT,
-		XE2_GT_COMPUTE_DSS_2,
-	};
-	int num_geometry_regs, num_compute_regs;
 	struct xe_device *xe = gt_to_xe(gt);
 	struct drm_printer p;
+	int num_geometry_regs, num_compute_regs;
 
 	get_num_dss_regs(xe, &num_geometry_regs, &num_compute_regs);
 
@@ -235,18 +228,23 @@ xe_gt_topology_init(struct xe_gt *gt)
 	 * Register counts returned shouldn't exceed the number of registers
 	 * passed as parameters below.
 	 */
-	xe_gt_assert(gt, num_geometry_regs <= ARRAY_SIZE(geometry_regs));
-	xe_gt_assert(gt, num_compute_regs <= ARRAY_SIZE(compute_regs));
+	drm_WARN_ON(&xe->drm, num_geometry_regs > 3);
+	drm_WARN_ON(&xe->drm, num_compute_regs > 3);
 
 	load_dss_mask(gt, gt->fuse_topo.g_dss_mask,
-		      num_geometry_regs, geometry_regs);
-	load_dss_mask(gt, gt->fuse_topo.c_dss_mask,
-		      num_compute_regs, compute_regs);
-
+		      num_geometry_regs,
+		      XELP_GT_GEOMETRY_DSS_ENABLE,
+		      XE2_GT_GEOMETRY_DSS_1,
+		      XE2_GT_GEOMETRY_DSS_2);
+	load_dss_mask(gt, gt->fuse_topo.c_dss_mask, num_compute_regs,
+		      XEHP_GT_COMPUTE_DSS_ENABLE,
+		      XEHPC_GT_COMPUTE_DSS_ENABLE_EXT,
+		      XE2_GT_COMPUTE_DSS_2);
 	load_eu_mask(gt, gt->fuse_topo.eu_mask_per_dss, &gt->fuse_topo.eu_type);
 	load_l3_bank_mask(gt, gt->fuse_topo.l3_bank_mask);
 
-	p = xe_gt_dbg_printer(gt);
+	p = drm_dbg_printer(&gt_to_xe(gt)->drm, DRM_UT_DRIVER, "GT topology");
+
 	xe_gt_topology_dump(gt, &p);
 }
 
@@ -288,6 +286,11 @@ unsigned int
 xe_dss_mask_group_ffs(const xe_dss_mask_t mask, int groupsize, int groupnum)
 {
 	return find_next_bit(mask, XE_MAX_DSS_FUSE_BITS, groupnum * groupsize);
+}
+
+bool xe_dss_mask_empty(const xe_dss_mask_t mask)
+{
+	return bitmap_empty(mask, XE_MAX_DSS_FUSE_BITS);
 }
 
 /**

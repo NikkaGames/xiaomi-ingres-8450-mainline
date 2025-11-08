@@ -58,9 +58,7 @@ Contents:
    ti/tlan
    ti/icssg_prueth
    wangxun/txgbe
-   wangxun/txgbevf
    wangxun/ngbe
-   wangxun/ngbevf
 
 .. only::  subproject and html
 

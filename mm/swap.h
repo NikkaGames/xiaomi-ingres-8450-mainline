@@ -3,8 +3,6 @@
 #define _MM_SWAP_H
 
 struct mempolicy;
-struct swap_iocb;
-
 extern int page_cluster;
 
 #ifdef CONFIG_SWAP
@@ -22,8 +20,8 @@ static inline void swap_read_unplug(struct swap_iocb *plug)
 		__swap_read_unplug(plug);
 }
 void swap_write_unplug(struct swap_iocb *sio);
-int swap_writeout(struct folio *folio, struct swap_iocb **swap_plug);
-void __swap_writepage(struct folio *folio, struct swap_iocb **swap_plug);
+int swap_writeout(struct folio *folio, struct writeback_control *wbc);
+void __swap_writepage(struct folio *folio, struct writeback_control *wbc);
 
 /* linux/mm/swap_state.c */
 /* One swap address space for each 64M swap space */
@@ -162,8 +160,7 @@ static inline struct folio *swapin_readahead(swp_entry_t swp, gfp_t gfp_mask,
 	return NULL;
 }
 
-static inline int swap_writeout(struct folio *folio,
-		struct swap_iocb **swap_plug)
+static inline int swap_writeout(struct folio *f, struct writeback_control *wbc)
 {
 	return 0;
 }

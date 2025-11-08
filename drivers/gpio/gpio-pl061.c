@@ -115,13 +115,11 @@ static int pl061_get_value(struct gpio_chip *gc, unsigned offset)
 	return !!readb(pl061->base + (BIT(offset + 2)));
 }
 
-static int pl061_set_value(struct gpio_chip *gc, unsigned int offset, int value)
+static void pl061_set_value(struct gpio_chip *gc, unsigned offset, int value)
 {
 	struct pl061 *pl061 = gpiochip_get_data(gc);
 
 	writeb(!!value << offset, pl061->base + (BIT(offset + 2)));
-
-	return 0;
 }
 
 static int pl061_irq_type(struct irq_data *d, unsigned trigger)

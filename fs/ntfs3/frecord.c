@@ -3003,7 +3003,8 @@ int ni_add_name(struct ntfs_inode *dir_ni, struct ntfs_inode *ni,
  * ni_rename - Remove one name and insert new name.
  */
 int ni_rename(struct ntfs_inode *dir_ni, struct ntfs_inode *new_dir_ni,
-	      struct ntfs_inode *ni, struct NTFS_DE *de, struct NTFS_DE *new_de)
+	      struct ntfs_inode *ni, struct NTFS_DE *de, struct NTFS_DE *new_de,
+	      bool *is_bad)
 {
 	int err;
 	struct NTFS_DE *de2 = NULL;
@@ -3026,8 +3027,8 @@ int ni_rename(struct ntfs_inode *dir_ni, struct ntfs_inode *new_dir_ni,
 	err = ni_add_name(new_dir_ni, ni, new_de);
 	if (!err) {
 		err = ni_remove_name(dir_ni, ni, de, &de2, &undo);
-		WARN_ON(err && ni_remove_name(new_dir_ni, ni, new_de, &de2,
-			&undo));
+		if (err && ni_remove_name(new_dir_ni, ni, new_de, &de2, &undo))
+			*is_bad = true;
 	}
 
 	/*
@@ -3118,21 +3119,11 @@ static bool ni_update_parent(struct ntfs_inode *ni, struct NTFS_DUP_INFO *dup,
 		}
 	}
 
-	dup->extend_data = 0;
+	/* TODO: Fill reparse info. */
+	dup->reparse = 0;
+	dup->ea_size = 0;
 
-	if (dup->fa & FILE_ATTRIBUTE_REPARSE_POINT) {
-		attr = ni_find_attr(ni, NULL, NULL, ATTR_REPARSE, NULL, 0, NULL,
-				    NULL);
-
-		if (attr) {
-			const struct REPARSE_POINT *rp;
-
-			rp = resident_data_ex(attr, sizeof(struct REPARSE_POINT));
-			/* If ATTR_REPARSE exists 'rp' can't be NULL. */
-			if (rp)
-				dup->extend_data = rp->ReparseTag;
-		}
-	} else if (ni->ni_flags & NI_FLAG_EA) {
+	if (ni->ni_flags & NI_FLAG_EA) {
 		attr = ni_find_attr(ni, attr, &le, ATTR_EA_INFO, NULL, 0, NULL,
 				    NULL);
 		if (attr) {
@@ -3141,7 +3132,7 @@ static bool ni_update_parent(struct ntfs_inode *ni, struct NTFS_DUP_INFO *dup,
 			info = resident_data_ex(attr, sizeof(struct EA_INFO));
 			/* If ATTR_EA_INFO exists 'info' can't be NULL. */
 			if (info)
-				dup->extend_data = info->size;
+				dup->ea_size = info->size_pack;
 		}
 	}
 
@@ -3207,10 +3198,6 @@ int ni_write_inode(struct inode *inode, int sync, const char *hint)
 
 	if (is_bad_inode(inode) || sb_rdonly(sb))
 		return 0;
-
-	/* Avoid any operation if inode is bad. */
-	if (unlikely(is_bad_ni(ni)))
-		return -EINVAL;
 
 	if (unlikely(ntfs3_forced_shutdown(sb)))
 		return -EIO;

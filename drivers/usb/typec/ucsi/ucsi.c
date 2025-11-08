@@ -531,12 +531,13 @@ ucsi_register_altmodes_nvidia(struct ucsi_connector *con, u8 recipient)
 	 * Update the original altmode table as some ppms may report
 	 * multiple DP altmodes.
 	 */
-	multi_dp = ucsi->ops->update_altmodes(ucsi, recipient, orig, updated);
+	if (recipient == UCSI_RECIPIENT_CON)
+		multi_dp = ucsi->ops->update_altmodes(ucsi, orig, updated);
 
 	/* now register altmodes */
 	for (i = 0; i < max_altmodes; i++) {
 		memset(&desc, 0, sizeof(desc));
-		if (multi_dp) {
+		if (multi_dp && recipient == UCSI_RECIPIENT_CON) {
 			desc.svid = updated[i].svid;
 			desc.vdo = updated[i].mid;
 		} else {
@@ -1245,7 +1246,6 @@ static void ucsi_handle_connector_change(struct work_struct *work)
 
 	if (change & UCSI_CONSTAT_POWER_DIR_CHANGE) {
 		typec_set_pwr_role(con->port, role);
-		ucsi_port_psy_changed(con);
 
 		/* Complete pending power role swap */
 		if (!completion_done(&con->complete))

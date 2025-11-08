@@ -874,7 +874,7 @@ where uvc-gadget is this program:
 
 with these patches:
 
-	https://lore.kernel.org/r/1386675637-18243-1-git-send-email-r.baldyga@samsung.com/
+	http://www.spinics.net/lists/linux-usb/msg99220.html
 
 host::
 

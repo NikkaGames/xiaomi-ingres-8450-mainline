@@ -347,7 +347,7 @@ struct attribute_group khugepaged_attr_group = {
 #endif /* CONFIG_SYSFS */
 
 int hugepage_madvise(struct vm_area_struct *vma,
-		     vm_flags_t *vm_flags, int advice)
+		     unsigned long *vm_flags, int advice)
 {
 	switch (advice) {
 	case MADV_HUGEPAGE:
@@ -470,7 +470,7 @@ void __khugepaged_enter(struct mm_struct *mm)
 }
 
 void khugepaged_enter_vma(struct vm_area_struct *vma,
-			  vm_flags_t vm_flags)
+			  unsigned long vm_flags)
 {
 	if (!test_bit(MMF_VM_HUGEPAGE, &vma->vm_mm->flags) &&
 	    hugepage_pmd_enabled()) {
@@ -700,15 +700,12 @@ static void __collapse_huge_page_copy_succeeded(pte_t *pte,
 						spinlock_t *ptl,
 						struct list_head *compound_pagelist)
 {
-	unsigned long end = address + HPAGE_PMD_SIZE;
 	struct folio *src, *tmp;
-	pte_t pteval;
 	pte_t *_pte;
-	unsigned int nr_ptes;
+	pte_t pteval;
 
-	for (_pte = pte; _pte < pte + HPAGE_PMD_NR; _pte += nr_ptes,
-	     address += nr_ptes * PAGE_SIZE) {
-		nr_ptes = 1;
+	for (_pte = pte; _pte < pte + HPAGE_PMD_NR;
+	     _pte++, address += PAGE_SIZE) {
 		pteval = ptep_get(_pte);
 		if (pte_none(pteval) || is_zero_pfn(pte_pfn(pteval))) {
 			add_mm_counter(vma->vm_mm, MM_ANONPAGES, 1);
@@ -725,26 +722,18 @@ static void __collapse_huge_page_copy_succeeded(pte_t *pte,
 			struct page *src_page = pte_page(pteval);
 
 			src = page_folio(src_page);
-
-			if (folio_test_large(src)) {
-				unsigned int max_nr_ptes = (end - address) >> PAGE_SHIFT;
-
-				nr_ptes = folio_pte_batch(src, _pte, pteval, max_nr_ptes);
-			} else {
+			if (!folio_test_large(src))
 				release_pte_folio(src);
-			}
-
 			/*
 			 * ptl mostly unnecessary, but preempt has to
 			 * be disabled to update the per-cpu stats
 			 * inside folio_remove_rmap_pte().
 			 */
 			spin_lock(ptl);
-			clear_ptes(vma->vm_mm, address, _pte, nr_ptes);
-			folio_remove_rmap_ptes(src, src_page, nr_ptes, vma);
+			ptep_clear(vma->vm_mm, address, _pte);
+			folio_remove_rmap_pte(src, src_page, vma);
 			spin_unlock(ptl);
-			free_swap_cache(src);
-			folio_put_refs(src, nr_ptes);
+			free_folio_and_swap_cache(src);
 		}
 	}
 
@@ -952,18 +941,12 @@ static inline int check_pmd_state(pmd_t *pmd)
 
 	if (pmd_none(pmde))
 		return SCAN_PMD_NONE;
-
-	/*
-	 * The folio may be under migration when khugepaged is trying to
-	 * collapse it. Migration success or failure will eventually end
-	 * up with a present PMD mapping a folio again.
-	 */
-	if (is_pmd_migration_entry(pmde))
-		return SCAN_PMD_MAPPED;
 	if (!pmd_present(pmde))
 		return SCAN_PMD_NULL;
 	if (pmd_trans_huge(pmde))
 		return SCAN_PMD_MAPPED;
+	if (pmd_devmap(pmde))
+		return SCAN_PMD_NULL;
 	if (pmd_bad(pmde))
 		return SCAN_PMD_NULL;
 	return SCAN_SUCCEED;
@@ -1172,11 +1155,11 @@ static int collapse_huge_page(struct mm_struct *mm, unsigned long address,
 	if (result != SCAN_SUCCEED)
 		goto out_up_write;
 	/* check if the pmd is still valid */
-	vma_start_write(vma);
 	result = check_pmd_still_valid(mm, address, pmd);
 	if (result != SCAN_SUCCEED)
 		goto out_up_write;
 
+	vma_start_write(vma);
 	anon_vma_lock_write(vma->anon_vma);
 
 	mmu_notifier_range_init(&range, MMU_NOTIFY_CLEAR, 0, mm, address,
@@ -1503,17 +1486,15 @@ static int set_huge_pmd(struct vm_area_struct *vma, unsigned long addr,
 int collapse_pte_mapped_thp(struct mm_struct *mm, unsigned long addr,
 			    bool install_pmd)
 {
-	int nr_mapped_ptes = 0, result = SCAN_FAIL;
-	unsigned int nr_batch_ptes;
 	struct mmu_notifier_range range;
 	bool notified = false;
 	unsigned long haddr = addr & HPAGE_PMD_MASK;
-	unsigned long end = haddr + HPAGE_PMD_SIZE;
 	struct vm_area_struct *vma = vma_lookup(mm, haddr);
 	struct folio *folio;
 	pte_t *start_pte, *pte;
 	pmd_t *pmd, pgt_pmd;
 	spinlock_t *pml = NULL, *ptl;
+	int nr_ptes = 0, result = SCAN_FAIL;
 	int i;
 
 	mmap_assert_locked(mm);
@@ -1627,14 +1608,10 @@ int collapse_pte_mapped_thp(struct mm_struct *mm, unsigned long addr,
 		goto abort;
 
 	/* step 2: clear page table and adjust rmap */
-	for (i = 0, addr = haddr, pte = start_pte; i < HPAGE_PMD_NR;
-	     i += nr_batch_ptes, addr += nr_batch_ptes * PAGE_SIZE,
-	     pte += nr_batch_ptes) {
-		unsigned int max_nr_batch_ptes = (end - addr) >> PAGE_SHIFT;
+	for (i = 0, addr = haddr, pte = start_pte;
+	     i < HPAGE_PMD_NR; i++, addr += PAGE_SIZE, pte++) {
 		struct page *page;
 		pte_t ptent = ptep_get(pte);
-
-		nr_batch_ptes = 1;
 
 		if (pte_none(ptent))
 			continue;
@@ -1649,29 +1626,26 @@ int collapse_pte_mapped_thp(struct mm_struct *mm, unsigned long addr,
 			goto abort;
 		}
 		page = vm_normal_page(vma, addr, ptent);
-
 		if (folio_page(folio, i) != page)
 			goto abort;
-
-		nr_batch_ptes = folio_pte_batch(folio, pte, ptent, max_nr_batch_ptes);
 
 		/*
 		 * Must clear entry, or a racing truncate may re-remove it.
 		 * TLB flush can be left until pmdp_collapse_flush() does it.
 		 * PTE dirty? Shmem page is already dirty; file is read-only.
 		 */
-		clear_ptes(mm, addr, pte, nr_batch_ptes);
-		folio_remove_rmap_ptes(folio, page, nr_batch_ptes, vma);
-		nr_mapped_ptes += nr_batch_ptes;
+		ptep_clear(mm, addr, pte);
+		folio_remove_rmap_pte(folio, page, vma);
+		nr_ptes++;
 	}
 
 	if (!pml)
 		spin_unlock(ptl);
 
 	/* step 3: set proper refcount and mm_counters. */
-	if (nr_mapped_ptes) {
-		folio_ref_sub(folio, nr_mapped_ptes);
-		add_mm_counter(mm, mm_counter_file(folio), -nr_mapped_ptes);
+	if (nr_ptes) {
+		folio_ref_sub(folio, nr_ptes);
+		add_mm_counter(mm, mm_counter_file(folio), -nr_ptes);
 	}
 
 	/* step 4: remove empty page table */
@@ -1704,10 +1678,10 @@ maybe_install_pmd:
 			: SCAN_SUCCEED;
 	goto drop_folio;
 abort:
-	if (nr_mapped_ptes) {
+	if (nr_ptes) {
 		flush_tlb_mm(mm);
-		folio_ref_sub(folio, nr_mapped_ptes);
-		add_mm_counter(mm, mm_counter_file(folio), -nr_mapped_ptes);
+		folio_ref_sub(folio, nr_ptes);
+		add_mm_counter(mm, mm_counter_file(folio), -nr_ptes);
 	}
 unlock:
 	if (start_pte)
@@ -2755,8 +2729,8 @@ static int madvise_collapse_errno(enum scan_result r)
 	}
 }
 
-int madvise_collapse(struct vm_area_struct *vma, unsigned long start,
-		     unsigned long end, bool *lock_dropped)
+int madvise_collapse(struct vm_area_struct *vma, struct vm_area_struct **prev,
+		     unsigned long start, unsigned long end)
 {
 	struct collapse_control *cc;
 	struct mm_struct *mm = vma->vm_mm;
@@ -2766,6 +2740,8 @@ int madvise_collapse(struct vm_area_struct *vma, unsigned long start,
 
 	BUG_ON(vma->vm_start > start);
 	BUG_ON(vma->vm_end < end);
+
+	*prev = vma;
 
 	if (!thp_vma_allowable_order(vma, vma->vm_flags, 0, PMD_ORDER))
 		return -EINVAL;
@@ -2814,7 +2790,7 @@ int madvise_collapse(struct vm_area_struct *vma, unsigned long start,
 							 &mmap_locked, cc);
 		}
 		if (!mmap_locked)
-			*lock_dropped = true;
+			*prev = NULL;  /* Tell caller we dropped mmap_lock */
 
 handle_result:
 		switch (result) {
@@ -2824,6 +2800,7 @@ handle_result:
 			break;
 		case SCAN_PTE_MAPPED_HUGEPAGE:
 			BUG_ON(mmap_locked);
+			BUG_ON(*prev);
 			mmap_read_lock(mm);
 			result = collapse_pte_mapped_thp(mm, addr, true);
 			mmap_read_unlock(mm);

@@ -444,9 +444,11 @@ static void gfs2_final_release_pages(struct gfs2_inode *ip)
 	struct inode *inode = &ip->i_inode;
 	struct gfs2_glock *gl = ip->i_gl;
 
-	/* This can only happen during incomplete inode creation. */
-	if (unlikely(!gl))
+	if (unlikely(!gl)) {
+		/* This can only happen during incomplete inode creation. */
+		BUG_ON(!test_bit(GIF_ALLOC_FAILED, &ip->i_flags));
 		return;
+	}
 
 	truncate_inode_pages(gfs2_glock2aspace(gl), 0);
 	truncate_inode_pages(&inode->i_data, 0);
@@ -900,6 +902,7 @@ fail_gunlock3:
 fail_gunlock2:
 	gfs2_glock_put(io_gl);
 fail_dealloc_inode:
+	set_bit(GIF_ALLOC_FAILED, &ip->i_flags);
 	dealloc_error = 0;
 	if (ip->i_eattr)
 		dealloc_error = gfs2_ea_dealloc(ip, xattr_initialized);

@@ -1859,11 +1859,10 @@ static int ftdi_gpio_get(struct gpio_chip *gc, unsigned int gpio)
 	return !!(result & BIT(gpio));
 }
 
-static int ftdi_gpio_set(struct gpio_chip *gc, unsigned int gpio, int value)
+static void ftdi_gpio_set(struct gpio_chip *gc, unsigned int gpio, int value)
 {
 	struct usb_serial_port *port = gpiochip_get_data(gc);
 	struct ftdi_private *priv = usb_get_serial_port_data(port);
-	int result;
 
 	mutex_lock(&priv->gpio_lock);
 
@@ -1872,11 +1871,9 @@ static int ftdi_gpio_set(struct gpio_chip *gc, unsigned int gpio, int value)
 	else
 		priv->gpio_value &= ~BIT(gpio);
 
-	result = ftdi_set_cbus_pins(port);
+	ftdi_set_cbus_pins(port);
 
 	mutex_unlock(&priv->gpio_lock);
-
-	return result;
 }
 
 static int ftdi_gpio_get_multiple(struct gpio_chip *gc, unsigned long *mask,
@@ -1894,22 +1891,19 @@ static int ftdi_gpio_get_multiple(struct gpio_chip *gc, unsigned long *mask,
 	return 0;
 }
 
-static int ftdi_gpio_set_multiple(struct gpio_chip *gc, unsigned long *mask,
+static void ftdi_gpio_set_multiple(struct gpio_chip *gc, unsigned long *mask,
 					unsigned long *bits)
 {
 	struct usb_serial_port *port = gpiochip_get_data(gc);
 	struct ftdi_private *priv = usb_get_serial_port_data(port);
-	int result;
 
 	mutex_lock(&priv->gpio_lock);
 
 	priv->gpio_value &= ~(*mask);
 	priv->gpio_value |= *bits & *mask;
-	result = ftdi_set_cbus_pins(port);
+	ftdi_set_cbus_pins(port);
 
 	mutex_unlock(&priv->gpio_lock);
-
-	return result;
 }
 
 static int ftdi_gpio_direction_get(struct gpio_chip *gc, unsigned int gpio)

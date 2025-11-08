@@ -26,6 +26,7 @@ struct bench_futex_parameters {
 	unsigned int nwakes;
 	unsigned int nrequeue;
 	int nbuckets;
+	bool buckets_immutable;
 };
 
 /**

@@ -80,9 +80,10 @@ static int timbgpio_gpio_direction_output(struct gpio_chip *gpio,
 	return timbgpio_update_bit(gpio, nr, TGPIODIR, false);
 }
 
-static int timbgpio_gpio_set(struct gpio_chip *gpio, unsigned int nr, int val)
+static void timbgpio_gpio_set(struct gpio_chip *gpio,
+				unsigned nr, int val)
 {
-	return timbgpio_update_bit(gpio, nr, TGPIOVAL, val != 0);
+	timbgpio_update_bit(gpio, nr, TGPIOVAL, val != 0);
 }
 
 static int timbgpio_to_irq(struct gpio_chip *gpio, unsigned offset)
@@ -137,7 +138,7 @@ static int timbgpio_irq_type(struct irq_data *d, unsigned trigger)
 	u32 ver;
 	int ret = 0;
 
-	if (offset < 0 || offset >= tgpio->gpio.ngpio)
+	if (offset < 0 || offset > tgpio->gpio.ngpio)
 		return -EINVAL;
 
 	ver = ioread32(tgpio->membase + TGPIO_VER);

@@ -705,7 +705,9 @@ int bnxt_qplib_create_srq(struct bnxt_qplib_res *res,
 	srq->dbinfo.db = srq->dpi->dbr;
 	srq->dbinfo.max_slot = 1;
 	srq->dbinfo.priv_db = res->dpi_tbl.priv_db;
-	bnxt_qplib_armen_db(&srq->dbinfo, DBC_DBC_TYPE_SRQ_ARMENA);
+	if (srq->threshold)
+		bnxt_qplib_armen_db(&srq->dbinfo, DBC_DBC_TYPE_SRQ_ARMENA);
+	srq->arm_req = false;
 
 	return 0;
 fail:
@@ -713,6 +715,24 @@ fail:
 	kfree(srq->swq);
 
 	return rc;
+}
+
+int bnxt_qplib_modify_srq(struct bnxt_qplib_res *res,
+			  struct bnxt_qplib_srq *srq)
+{
+	struct bnxt_qplib_hwq *srq_hwq = &srq->hwq;
+	u32 count;
+
+	count = __bnxt_qplib_get_avail(srq_hwq);
+	if (count > srq->threshold) {
+		srq->arm_req = false;
+		bnxt_qplib_srq_arm_db(&srq->dbinfo, srq->threshold);
+	} else {
+		/* Deferred arming */
+		srq->arm_req = true;
+	}
+
+	return 0;
 }
 
 int bnxt_qplib_query_srq(struct bnxt_qplib_res *res,
@@ -756,6 +776,7 @@ int bnxt_qplib_post_srq_recv(struct bnxt_qplib_srq *srq,
 	struct bnxt_qplib_hwq *srq_hwq = &srq->hwq;
 	struct rq_wqe *srqe;
 	struct sq_sge *hw_sge;
+	u32 count = 0;
 	int i, next;
 
 	spin_lock(&srq_hwq->lock);
@@ -787,8 +808,15 @@ int bnxt_qplib_post_srq_recv(struct bnxt_qplib_srq *srq,
 
 	bnxt_qplib_hwq_incr_prod(&srq->dbinfo, srq_hwq, srq->dbinfo.max_slot);
 
+	spin_lock(&srq_hwq->lock);
+	count = __bnxt_qplib_get_avail(srq_hwq);
+	spin_unlock(&srq_hwq->lock);
 	/* Ring DB */
 	bnxt_qplib_ring_prod_db(&srq->dbinfo, DBC_DBC_TYPE_SRQ);
+	if (srq->arm_req == true && count > srq->threshold) {
+		srq->arm_req = false;
+		bnxt_qplib_srq_arm_db(&srq->dbinfo, srq->threshold);
+	}
 
 	return 0;
 }
@@ -1722,9 +1750,9 @@ static void bnxt_qplib_fill_psn_search(struct bnxt_qplib_qp *qp,
 	}
 }
 
-static unsigned int bnxt_qplib_put_inline(struct bnxt_qplib_qp *qp,
-					  struct bnxt_qplib_swqe *wqe,
-					  u32 *idx)
+static int bnxt_qplib_put_inline(struct bnxt_qplib_qp *qp,
+				 struct bnxt_qplib_swqe *wqe,
+				 u16 *idx)
 {
 	struct bnxt_qplib_hwq *hwq;
 	int len, t_len, offt;
@@ -1741,7 +1769,7 @@ static unsigned int bnxt_qplib_put_inline(struct bnxt_qplib_qp *qp,
 		il_src = (void *)wqe->sg_list[indx].addr;
 		t_len += len;
 		if (t_len > qp->max_inline_data)
-			return BNXT_RE_INVAL_MSG_SIZE;
+			return -ENOMEM;
 		while (len) {
 			if (pull_dst) {
 				pull_dst = false;
@@ -1767,9 +1795,9 @@ static unsigned int bnxt_qplib_put_inline(struct bnxt_qplib_qp *qp,
 	return t_len;
 }
 
-static unsigned int bnxt_qplib_put_sges(struct bnxt_qplib_hwq *hwq,
-					struct bnxt_qplib_sge *ssge,
-					u32 nsge, u32 *idx)
+static u32 bnxt_qplib_put_sges(struct bnxt_qplib_hwq *hwq,
+			       struct bnxt_qplib_sge *ssge,
+			       u16 nsge, u16 *idx)
 {
 	struct sq_sge *dsge;
 	int indx, len = 0;
@@ -1850,12 +1878,14 @@ int bnxt_qplib_post_send(struct bnxt_qplib_qp *qp,
 	struct bnxt_qplib_hwq *hwq;
 	struct bnxt_qplib_swq *swq;
 	bool sch_handler = false;
-	u32 wqe_idx, slots, idx;
 	u16 wqe_sz, qdf = 0;
 	bool msn_update;
 	void *base_hdr;
 	void *ext_hdr;
 	__le32 temp32;
+	u32 wqe_idx;
+	u32 slots;
+	u16 idx;
 
 	hwq = &sq->hwq;
 	if (qp->state != CMDQ_MODIFY_QP_NEW_STATE_RTS &&
@@ -1907,10 +1937,8 @@ int bnxt_qplib_post_send(struct bnxt_qplib_qp *qp,
 	else
 		data_len = bnxt_qplib_put_sges(hwq, wqe->sg_list, wqe->num_sge,
 					       &idx);
-	if (data_len > BNXT_RE_MAX_MSG_SIZE) {
-		rc = -EINVAL;
-		goto done;
-	}
+	if (data_len < 0)
+		goto queue_err;
 	/* Make sure we update MSN table only for wired wqes */
 	msn_update = true;
 	/* Specifics */
@@ -2111,8 +2139,8 @@ int bnxt_qplib_post_recv(struct bnxt_qplib_qp *qp,
 	struct bnxt_qplib_hwq *hwq;
 	struct bnxt_qplib_swq *swq;
 	bool sch_handler = false;
-	u32 wqe_idx, idx;
-	u16 wqe_sz;
+	u16 wqe_sz, idx;
+	u32 wqe_idx;
 	int rc = 0;
 
 	hwq = &rq->hwq;

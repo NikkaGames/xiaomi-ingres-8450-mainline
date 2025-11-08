@@ -1289,7 +1289,9 @@ xrep_dir_scan_dirtree(
 	if (sc->ilock_flags & (XFS_ILOCK_SHARED | XFS_ILOCK_EXCL))
 		xchk_iunlock(sc, sc->ilock_flags & (XFS_ILOCK_SHARED |
 						    XFS_ILOCK_EXCL));
-	xchk_trans_alloc_empty(sc);
+	error = xchk_trans_alloc_empty(sc);
+	if (error)
+		return error;
 
 	while ((error = xchk_iscan_iter(&rd->pscan.iscan, &ip)) == 1) {
 		bool		flush;
@@ -1315,7 +1317,9 @@ xrep_dir_scan_dirtree(
 			if (error)
 				break;
 
-			xchk_trans_alloc_empty(sc);
+			error = xchk_trans_alloc_empty(sc);
+			if (error)
+				break;
 		}
 
 		if (xchk_should_terminate(sc, &error))

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Check Arm CoreSight trace data recording and synthesized samples (exclusive)
 
 # Uses the 'perf record' to record trace data with Arm CoreSight sinks;

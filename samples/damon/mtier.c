@@ -12,11 +12,6 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 
-#ifdef MODULE_PARAM_PREFIX
-#undef MODULE_PARAM_PREFIX
-#endif
-#define MODULE_PARAM_PREFIX "damon_sample_mtier."
-
 static unsigned long node0_start_addr __read_mostly;
 module_param(node0_start_addr, ulong, 0600);
 
@@ -29,46 +24,19 @@ module_param(node1_start_addr, ulong, 0600);
 static unsigned long node1_end_addr __read_mostly;
 module_param(node1_end_addr, ulong, 0600);
 
-static unsigned long node0_mem_used_bp __read_mostly = 9970;
-module_param(node0_mem_used_bp, ulong, 0600);
-
-static unsigned long node0_mem_free_bp __read_mostly = 50;
-module_param(node0_mem_free_bp, ulong, 0600);
-
 static int damon_sample_mtier_enable_store(
 		const char *val, const struct kernel_param *kp);
 
-static const struct kernel_param_ops enabled_param_ops = {
+static const struct kernel_param_ops enable_param_ops = {
 	.set = damon_sample_mtier_enable_store,
 	.get = param_get_bool,
 };
 
-static bool enabled __read_mostly;
-module_param_cb(enabled, &enabled_param_ops, &enabled, 0600);
-MODULE_PARM_DESC(enabled, "Enable or disable DAMON_SAMPLE_MTIER");
-
-static bool detect_node_addresses __read_mostly;
-module_param(detect_node_addresses, bool, 0600);
+static bool enable __read_mostly;
+module_param_cb(enable, &enable_param_ops, &enable, 0600);
+MODULE_PARM_DESC(enable, "Enable of disable DAMON_SAMPLE_MTIER");
 
 static struct damon_ctx *ctxs[2];
-
-struct region_range {
-	phys_addr_t start;
-	phys_addr_t end;
-};
-
-static int nid_to_phys(int target_node, struct region_range *range)
-{
-	if (!node_online(target_node)) {
-		pr_err("NUMA node %d is not online\n", target_node);
-		return -EINVAL;
-	}
-
-	range->start = PFN_PHYS(node_start_pfn(target_node));
-	range->end  = PFN_PHYS(node_end_pfn(target_node));
-
-	return 0;
-}
 
 static struct damon_ctx *damon_sample_mtier_build_ctx(bool promote)
 {
@@ -79,8 +47,6 @@ static struct damon_ctx *damon_sample_mtier_build_ctx(bool promote)
 	struct damos *scheme;
 	struct damos_quota_goal *quota_goal;
 	struct damos_filter *filter;
-	struct region_range addr;
-	int ret;
 
 	ctx = damon_new_ctx();
 	if (!ctx)
@@ -110,17 +76,9 @@ static struct damon_ctx *damon_sample_mtier_build_ctx(bool promote)
 	if (!target)
 		goto free_out;
 	damon_add_target(ctx, target);
-
-	if (detect_node_addresses) {
-		ret = promote ? nid_to_phys(1, &addr) : nid_to_phys(0, &addr);
-		if (ret)
-			goto free_out;
-	} else {
-		addr.start = promote ? node1_start_addr : node0_start_addr;
-		addr.end = promote ? node1_end_addr : node0_end_addr;
-	}
-
-	region = damon_new_region(addr.start, addr.end);
+	region = damon_new_region(
+			promote ? node1_start_addr : node0_start_addr,
+			promote ? node1_end_addr : node0_end_addr);
 	if (!region)
 		goto free_out;
 	damon_add_region(region, target);
@@ -154,7 +112,7 @@ static struct damon_ctx *damon_sample_mtier_build_ctx(bool promote)
 	quota_goal = damos_new_quota_goal(
 			promote ? DAMOS_QUOTA_NODE_MEM_USED_BP :
 			DAMOS_QUOTA_NODE_MEM_FREE_BP,
-			promote ? node0_mem_used_bp : node0_mem_free_bp);
+			promote ? 9970 : 50);
 	if (!quota_goal)
 		goto free_out;
 	quota_goal->nid = 0;
@@ -193,25 +151,23 @@ static void damon_sample_mtier_stop(void)
 	damon_destroy_ctx(ctxs[1]);
 }
 
-static bool init_called;
-
 static int damon_sample_mtier_enable_store(
 		const char *val, const struct kernel_param *kp)
 {
-	bool is_enabled = enabled;
+	bool enabled = enable;
 	int err;
 
-	err = kstrtobool(val, &enabled);
+	err = kstrtobool(val, &enable);
 	if (err)
 		return err;
 
-	if (enabled == is_enabled)
+	if (enable == enabled)
 		return 0;
 
-	if (enabled) {
+	if (enable) {
 		err = damon_sample_mtier_start();
 		if (err)
-			enabled = false;
+			enable = false;
 		return err;
 	}
 	damon_sample_mtier_stop();
@@ -220,14 +176,6 @@ static int damon_sample_mtier_enable_store(
 
 static int __init damon_sample_mtier_init(void)
 {
-	int err = 0;
-
-	init_called = true;
-	if (enabled) {
-		err = damon_sample_mtier_start();
-		if (err)
-			enabled = false;
-	}
 	return 0;
 }
 

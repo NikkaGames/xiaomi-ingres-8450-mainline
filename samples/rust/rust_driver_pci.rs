@@ -18,19 +18,16 @@ impl Regs {
 
 type Bar0 = pci::Bar<{ Regs::END }>;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug)]
 struct TestIndex(u8);
 
 impl TestIndex {
     const NO_EVENTFD: Self = Self(0);
 }
 
-#[pin_data(PinnedDrop)]
 struct SampleDriver {
     pdev: ARef<pci::Device>,
-    #[pin]
     bar: Devres<Bar0>,
-    index: TestIndex,
 }
 
 kernel::pci_device_table!(
@@ -76,12 +73,13 @@ impl pci::Driver for SampleDriver {
         pdev.enable_device_mem()?;
         pdev.set_master();
 
-        let drvdata = KBox::pin_init(
-            try_pin_init!(Self {
+        let bar = pdev.iomap_region_sized::<{ Regs::END }>(0, c_str!("rust_driver_pci"))?;
+
+        let drvdata = KBox::new(
+            Self {
                 pdev: pdev.into(),
-                bar <- pdev.iomap_region_sized::<{ Regs::END }>(0, c_str!("rust_driver_pci")),
-                index: *info,
-            }),
+                bar,
+            },
             GFP_KERNEL,
         )?;
 
@@ -92,20 +90,12 @@ impl pci::Driver for SampleDriver {
             Self::testdev(info, bar)?
         );
 
-        Ok(drvdata)
-    }
-
-    fn unbind(pdev: &pci::Device<Core>, this: Pin<&Self>) {
-        if let Ok(bar) = this.bar.access(pdev.as_ref()) {
-            // Reset pci-testdev by writing a new test index.
-            bar.write8(this.index.0, Regs::TEST);
-        }
+        Ok(drvdata.into())
     }
 }
 
-#[pinned_drop]
-impl PinnedDrop for SampleDriver {
-    fn drop(self: Pin<&mut Self>) {
+impl Drop for SampleDriver {
+    fn drop(&mut self) {
         dev_dbg!(self.pdev.as_ref(), "Remove Rust PCI driver sample.\n");
     }
 }

@@ -11,14 +11,18 @@
 	compatible = "wm,wm8650";
 
 	cpus {
-		#address-cells = <1>;
+		#address-cells = <0>;
 		#size-cells = <0>;
 
-		cpu@0 {
+		cpu {
 			device_type = "cpu";
 			compatible = "arm,arm926ej-s";
-			reg = <0x0>;
 		};
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x0 0x0>;
 	};
 
  	aliases {
@@ -192,7 +196,7 @@
 			interrupts = <43>;
 		};
 
-		mmc@d800a000 {
+		sdhc@d800a000 {
 			compatible = "wm,wm8505-sdhc";
 			reg = <0xd800a000 0x400>;
 			interrupts = <20>, <21>;

@@ -35,6 +35,7 @@
 #include <net/cfg80211.h>
 #include <uapi/linux/batadv_packet.h>
 
+#include "bat_algo.h"
 #include "bat_v_ogm.h"
 #include "hard-interface.h"
 #include "log.h"
@@ -471,12 +472,15 @@ void batadv_v_elp_iface_activate(struct batadv_hard_iface *primary_iface,
 void batadv_v_elp_primary_iface_set(struct batadv_hard_iface *primary_iface)
 {
 	struct batadv_hard_iface *hard_iface;
-	struct list_head *iter;
 
 	/* update orig field of every elp iface belonging to this mesh */
 	rcu_read_lock();
-	netdev_for_each_lower_private_rcu(primary_iface->mesh_iface, hard_iface, iter)
+	list_for_each_entry_rcu(hard_iface, &batadv_hardif_list, list) {
+		if (primary_iface->mesh_iface != hard_iface->mesh_iface)
+			continue;
+
 		batadv_v_elp_iface_activate(primary_iface, hard_iface);
+	}
 	rcu_read_unlock();
 }
 

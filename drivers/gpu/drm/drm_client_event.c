@@ -3,7 +3,6 @@
  * Copyright 2018 Noralf Trønnes
  */
 
-#include <linux/export.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/seq_file.h>

@@ -237,8 +237,7 @@ xchk_setup_fscounters(
 			return error;
 	}
 
-	xchk_trans_alloc_empty(sc);
-	return 0;
+	return xchk_trans_alloc_empty(sc);
 }
 
 /*

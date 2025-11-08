@@ -101,7 +101,7 @@ static int sdw_drv_probe(struct device *dev)
 	/*
 	 * attach to power domain but don't turn on (last arg)
 	 */
-	ret = dev_pm_domain_attach(dev, 0);
+	ret = dev_pm_domain_attach(dev, false);
 	if (ret)
 		return ret;
 

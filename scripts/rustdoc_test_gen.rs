@@ -85,25 +85,24 @@ fn find_real_path<'a>(srctree: &Path, valid_paths: &'a mut Vec<PathBuf>, file: &
         }
     }
 
-    match valid_paths.as_slice() {
-        [] => panic!(
-            "No path candidates found for `{file}`. This is likely a bug in the build system, or \
-            some files went away while compiling."
-        ),
-        [valid_path] => valid_path.to_str().unwrap(),
-        valid_paths => {
-            use std::fmt::Write;
+    assert!(
+        valid_paths.len() > 0,
+        "No path candidates found for `{file}`. This is likely a bug in the build system, or some \
+        files went away while compiling."
+    );
 
-            let mut candidates = String::new();
-            for path in valid_paths {
-                writeln!(&mut candidates, "    {path:?}").unwrap();
-            }
-            panic!(
-                "Several path candidates found for `{file}`, please resolve the ambiguity by \
-                renaming a file or folder. Candidates:\n{candidates}",
-            );
+    if valid_paths.len() > 1 {
+        eprintln!("Several path candidates found:");
+        for path in valid_paths {
+            eprintln!("    {path:?}");
         }
+        panic!(
+            "Several path candidates found for `{file}`, please resolve the ambiguity by renaming \
+            a file or folder."
+        );
     }
+
+    valid_paths[0].to_str().unwrap()
 }
 
 fn main() {

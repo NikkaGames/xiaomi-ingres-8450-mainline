@@ -926,7 +926,6 @@ static const struct dc_debug_options debug_defaults_drv = {
 	.seamless_boot_odm_combine = true,
 	.enable_legacy_fast_update = true,
 	.using_dml2 = false,
-	.disable_dsc_power_gate = true,
 };
 
 static const struct dc_panel_config panel_config_defaults = {
@@ -1668,12 +1667,12 @@ static struct clock_source *dcn31_clock_source_create(
 static int dcn314_populate_dml_pipes_from_context(
 	struct dc *dc, struct dc_state *context,
 	display_e2e_pipe_params_st *pipes,
-	enum dc_validate_mode validate_mode)
+	bool fast_validate)
 {
 	int pipe_cnt;
 
 	DC_FP_START();
-	pipe_cnt = dcn314_populate_dml_pipes_from_context_fpu(dc, context, pipes, validate_mode);
+	pipe_cnt = dcn314_populate_dml_pipes_from_context_fpu(dc, context, pipes, fast_validate);
 	DC_FP_END();
 
 	return pipe_cnt;
@@ -1697,7 +1696,7 @@ static void dcn314_get_panel_config_defaults(struct dc_panel_config *panel_confi
 
 enum dc_status dcn314_validate_bandwidth(struct dc *dc,
 		struct dc_state *context,
-		enum dc_validate_mode validate_mode)
+		bool fast_validate)
 {
 	bool out = false;
 
@@ -1716,19 +1715,19 @@ enum dc_status dcn314_validate_bandwidth(struct dc *dc,
 
 	DC_FP_START();
 	// do not support self refresh only
-	out = dcn30_internal_validate_bw(dc, context, pipes, &pipe_cnt, &vlevel, validate_mode, false);
+	out = dcn30_internal_validate_bw(dc, context, pipes, &pipe_cnt, &vlevel, fast_validate, false);
 	DC_FP_END();
 
-	// Disable DC_VALIDATE_MODE_ONLY and DC_VALIDATE_MODE_AND_STATE_INDEX to set min dcfclk in calculate_wm_and_dlg
+	// Disable fast_validate to set min dcfclk in calculate_wm_and_dlg
 	if (pipe_cnt == 0)
-		validate_mode = DC_VALIDATE_MODE_AND_PROGRAMMING;
+		fast_validate = false;
 
 	if (!out)
 		goto validate_fail;
 
 	BW_VAL_TRACE_END_VOLTAGE_LEVEL();
 
-	if (validate_mode != DC_VALIDATE_MODE_AND_PROGRAMMING) {
+	if (fast_validate) {
 		BW_VAL_TRACE_SKIP(fast);
 		goto validate_out;
 	}
@@ -1780,9 +1779,7 @@ static struct resource_funcs dcn314_res_pool_funcs = {
 	.get_panel_config_defaults = dcn314_get_panel_config_defaults,
 	.get_preferred_eng_id_dpia = dcn314_get_preferred_eng_id_dpia,
 	.get_det_buffer_size = dcn31_get_det_buffer_size,
-	.get_vstartup_for_pipe = dcn10_get_vstartup_for_pipe,
-	.update_dc_state_for_encoder_switch = dcn31_update_dc_state_for_encoder_switch,
-	.build_pipe_pix_clk_params = dcn20_build_pipe_pix_clk_params
+	.get_vstartup_for_pipe = dcn10_get_vstartup_for_pipe
 };
 
 static struct clock_source *dcn30_clock_source_create(
@@ -2119,8 +2116,6 @@ static bool dcn314_resource_construct(
 
 	for (i = 0; i < dc->caps.max_planes; ++i)
 		dc->caps.planes[i] = plane_cap;
-
-	dc->caps.max_odm_combine_factor = 4;
 
 	dc->cap_funcs = cap_funcs;
 

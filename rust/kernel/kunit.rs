@@ -7,10 +7,7 @@
 //! Reference: <https://docs.kernel.org/dev-tools/kunit/index.html>
 
 use crate::prelude::*;
-use core::fmt;
-
-#[cfg(CONFIG_PRINTK)]
-use crate::c_str;
+use core::{ffi::c_void, fmt};
 
 /// Prints a KUnit error-level message.
 ///
@@ -22,8 +19,8 @@ pub fn err(args: fmt::Arguments<'_>) {
     #[cfg(CONFIG_PRINTK)]
     unsafe {
         bindings::_printk(
-            c_str!("\x013%pA").as_char_ptr(),
-            core::ptr::from_ref(&args).cast::<c_void>(),
+            c"\x013%pA".as_ptr() as _,
+            &args as *const _ as *const c_void,
         );
     }
 }
@@ -38,8 +35,8 @@ pub fn info(args: fmt::Arguments<'_>) {
     #[cfg(CONFIG_PRINTK)]
     unsafe {
         bindings::_printk(
-            c_str!("\x016%pA").as_char_ptr(),
-            core::ptr::from_ref(&args).cast::<c_void>(),
+            c"\x016%pA".as_ptr() as _,
+            &args as *const _ as *const c_void,
         );
     }
 }

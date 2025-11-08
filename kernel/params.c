@@ -513,14 +513,13 @@ EXPORT_SYMBOL(param_array_ops);
 int param_set_copystring(const char *val, const struct kernel_param *kp)
 {
 	const struct kparam_string *kps = kp->str;
-	const size_t len = strnlen(val, kps->maxlen);
 
-	if (len == kps->maxlen) {
+	if (strnlen(val, kps->maxlen) == kps->maxlen) {
 		pr_err("%s: string doesn't fit in %u chars.\n",
 		       kp->name, kps->maxlen-1);
 		return -ENOSPC;
 	}
-	memcpy(kps->string, val, len + 1);
+	strcpy(kps->string, val);
 	return 0;
 }
 EXPORT_SYMBOL(param_set_copystring);
@@ -842,7 +841,7 @@ static void __init param_sysfs_builtin(void)
 		dot = strchr(kp->name, '.');
 		if (!dot) {
 			/* This happens for core_param() */
-			strscpy(modname, "kernel");
+			strcpy(modname, "kernel");
 			name_len = 0;
 		} else {
 			name_len = dot - kp->name + 1;

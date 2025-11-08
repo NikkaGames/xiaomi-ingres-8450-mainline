@@ -22,10 +22,9 @@
 #include <linux/auxiliary_bus.h>
 #include <linux/bitfield.h>
 #include <linux/bits.h>
-#include <linux/intel_tpmi.h>
-#include <linux/intel_vsec.h>
 #include <linux/io.h>
 #include <linux/module.h>
+#include <linux/intel_tpmi.h>
 
 #include "../tpmi_power_domains.h"
 #include "uncore-frequency-common.h"
@@ -192,14 +191,9 @@ static int uncore_read_control_freq(struct uncore_data *data, unsigned int *valu
 static int write_eff_lat_ctrl(struct uncore_data *data, unsigned int val, enum uncore_index index)
 {
 	struct tpmi_uncore_cluster_info *cluster_info;
-	struct tpmi_uncore_struct *uncore_root;
 	u64 control;
 
 	cluster_info = container_of(data, struct tpmi_uncore_cluster_info, uncore_data);
-	uncore_root = cluster_info->uncore_root;
-
-	if (uncore_root->write_blocked)
-		return -EPERM;
 
 	if (cluster_info->root_domain)
 		return -ENODATA;
@@ -454,7 +448,7 @@ static void remove_cluster_entries(struct tpmi_uncore_struct *tpmi_uncore)
 }
 
 static void set_cdie_id(int domain_id, struct tpmi_uncore_cluster_info *cluster_info,
-			struct oobmsm_plat_info *plat_info)
+		       struct intel_tpmi_plat_info *plat_info)
 {
 
 	cluster_info->cdie_id = domain_id;
@@ -471,7 +465,7 @@ static void set_cdie_id(int domain_id, struct tpmi_uncore_cluster_info *cluster_
 static int uncore_probe(struct auxiliary_device *auxdev, const struct auxiliary_device_id *id)
 {
 	bool read_blocked = 0, write_blocked = 0;
-	struct oobmsm_plat_info *plat_info;
+	struct intel_tpmi_plat_info *plat_info;
 	struct tpmi_uncore_struct *tpmi_uncore;
 	bool uncore_sysfs_added = false;
 	int ret, i, pkg = 0;

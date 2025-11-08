@@ -49,7 +49,6 @@ properties:
       - description: v2 of TSENS
         items:
           - enum:
-              - qcom,milos-tsens
               - qcom,msm8953-tsens
               - qcom,msm8996-tsens
               - qcom,msm8998-tsens

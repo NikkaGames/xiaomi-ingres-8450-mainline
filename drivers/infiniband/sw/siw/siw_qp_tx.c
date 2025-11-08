@@ -277,15 +277,6 @@ static int siw_qp_prepare_tx(struct siw_iwarp_tx *c_tx)
 	return PKT_FRAGMENTED;
 }
 
-static noinline_for_stack int
-siw_sendmsg(struct socket *sock, unsigned int msg_flags,
-	    struct kvec *vec, size_t num, size_t len)
-{
-	struct msghdr msg = { .msg_flags = msg_flags };
-
-	return kernel_sendmsg(sock, &msg, vec, num, len);
-}
-
 /*
  * Send out one complete control type FPDU, or header of FPDU carrying
  * data. Used for fixed sized packets like Read.Requests or zero length
@@ -294,11 +285,12 @@ siw_sendmsg(struct socket *sock, unsigned int msg_flags,
 static int siw_tx_ctrl(struct siw_iwarp_tx *c_tx, struct socket *s,
 			      int flags)
 {
+	struct msghdr msg = { .msg_flags = flags };
 	struct kvec iov = { .iov_base =
 				    (char *)&c_tx->pkt.ctrl + c_tx->ctrl_sent,
 			    .iov_len = c_tx->ctrl_len - c_tx->ctrl_sent };
 
-	int rv = siw_sendmsg(s, flags, &iov, 1, iov.iov_len);
+	int rv = kernel_sendmsg(s, &msg, &iov, 1, iov.iov_len);
 
 	if (rv >= 0) {
 		c_tx->ctrl_sent += rv;
@@ -340,17 +332,18 @@ static int siw_tcp_sendpages(struct socket *s, struct page **page, int offset,
 		if (!sendpage_ok(page[i]))
 			msg.msg_flags &= ~MSG_SPLICE_PAGES;
 		bvec_set_page(&bvec, page[i], bytes, offset);
-		iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, bytes);
+		iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, &bvec, 1, size);
 
 try_page_again:
 		lock_sock(sk);
-		rv = tcp_sendmsg_locked(sk, &msg, bytes);
+		rv = tcp_sendmsg_locked(sk, &msg, size);
 		release_sock(sk);
 
 		if (rv > 0) {
 			size -= rv;
 			sent += rv;
 			if (rv != bytes) {
+				offset += rv;
 				bytes -= rv;
 				goto try_page_again;
 			}
@@ -434,13 +427,13 @@ static void siw_unmap_pages(struct kvec *iov, unsigned long kmap_mask, int len)
  * Write out iov referencing hdr, data and trailer of current FPDU.
  * Update transmit state dependent on write return status
  */
-static noinline_for_stack int siw_tx_hdt(struct siw_iwarp_tx *c_tx,
-					 struct socket *s)
+static int siw_tx_hdt(struct siw_iwarp_tx *c_tx, struct socket *s)
 {
 	struct siw_wqe *wqe = &c_tx->wqe_active;
 	struct siw_sge *sge = &wqe->sqe.sge[c_tx->sge_idx];
 	struct kvec iov[MAX_ARRAY];
 	struct page *page_array[MAX_ARRAY];
+	struct msghdr msg = { .msg_flags = MSG_DONTWAIT | MSG_EOR };
 
 	int seg = 0, do_crc = c_tx->do_crc, is_kva = 0, rv;
 	unsigned int data_len = c_tx->bytes_unsent, hdr_len = 0, trl_len = 0,
@@ -593,16 +586,14 @@ sge_done:
 		rv = siw_0copy_tx(s, page_array, &wqe->sqe.sge[c_tx->sge_idx],
 				  c_tx->sge_off, data_len);
 		if (rv == data_len) {
-
-			rv = siw_sendmsg(s, MSG_DONTWAIT | MSG_EOR, &iov[seg],
-					 1, trl_len);
+			rv = kernel_sendmsg(s, &msg, &iov[seg], 1, trl_len);
 			if (rv > 0)
 				rv += data_len;
 			else
 				rv = data_len;
 		}
 	} else {
-		rv = siw_sendmsg(s, MSG_DONTWAIT | MSG_EOR, iov, seg + 1,
+		rv = kernel_sendmsg(s, &msg, iov, seg + 1,
 				    hdr_len + data_len + trl_len);
 		siw_unmap_pages(iov, kmap_mask, seg);
 	}

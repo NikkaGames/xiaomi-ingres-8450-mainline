@@ -109,8 +109,6 @@ void disable_cpufreq(void)
 {
 	off = 1;
 }
-EXPORT_SYMBOL_GPL(disable_cpufreq);
-
 static DEFINE_MUTEX(cpufreq_governor_mutex);
 
 bool have_governor_per_policy(void)
@@ -969,7 +967,6 @@ static struct attribute *cpufreq_attrs[] = {
 	&cpuinfo_min_freq.attr,
 	&cpuinfo_max_freq.attr,
 	&cpuinfo_transition_latency.attr,
-	&scaling_cur_freq.attr,
 	&scaling_min_freq.attr,
 	&scaling_max_freq.attr,
 	&affected_cpus.attr,
@@ -1097,6 +1094,10 @@ static int cpufreq_add_dev_interface(struct cpufreq_policy *policy)
 		if (ret)
 			return ret;
 	}
+
+	ret = sysfs_create_file(&policy->kobj, &scaling_cur_freq.attr);
+	if (ret)
+		return ret;
 
 	if (cpufreq_driver->bios_limit) {
 		ret = sysfs_create_file(&policy->kobj, &bios_limit.attr);
@@ -1283,8 +1284,6 @@ static struct cpufreq_policy *cpufreq_policy_alloc(unsigned int cpu)
 		goto err_free_real_cpus;
 	}
 
-	init_rwsem(&policy->rwsem);
-
 	freq_constraints_init(&policy->constraints);
 
 	policy->nb_min.notifier_call = cpufreq_notifier_min;
@@ -1307,6 +1306,7 @@ static struct cpufreq_policy *cpufreq_policy_alloc(unsigned int cpu)
 	}
 
 	INIT_LIST_HEAD(&policy->policy_list);
+	init_rwsem(&policy->rwsem);
 	spin_lock_init(&policy->transition_lock);
 	init_waitqueue_head(&policy->transition_wait);
 	INIT_WORK(&policy->update, handle_update);
@@ -1694,13 +1694,14 @@ static void __cpufreq_offline(unsigned int cpu, struct cpufreq_policy *policy)
 		return;
 	}
 
-	if (has_target()) {
+	if (has_target())
 		strscpy(policy->last_governor, policy->governor->name,
 			CPUFREQ_NAME_LEN);
-		cpufreq_exit_governor(policy);
-	} else {
+	else
 		policy->last_policy = policy->policy;
-	}
+
+	if (has_target())
+		cpufreq_exit_governor(policy);
 
 	/*
 	 * Perform the ->offline() during light-weight tear-down, as
@@ -1801,9 +1802,6 @@ static void cpufreq_out_of_sync(struct cpufreq_policy *policy,
 static unsigned int cpufreq_verify_current_freq(struct cpufreq_policy *policy, bool update)
 {
 	unsigned int new_freq;
-
-	if (!cpufreq_driver->get)
-		return 0;
 
 	new_freq = cpufreq_driver->get(policy->cpu);
 	if (!new_freq)
@@ -1927,7 +1925,10 @@ unsigned int cpufreq_get(unsigned int cpu)
 
 	guard(cpufreq_policy_read)(policy);
 
-	return __cpufreq_get(policy);
+	if (cpufreq_driver->get)
+		return __cpufreq_get(policy);
+
+	return 0;
 }
 EXPORT_SYMBOL(cpufreq_get);
 
@@ -2481,7 +2482,8 @@ int cpufreq_start_governor(struct cpufreq_policy *policy)
 
 	pr_debug("%s: for CPU %u\n", __func__, policy->cpu);
 
-	cpufreq_verify_current_freq(policy, false);
+	if (cpufreq_driver->get)
+		cpufreq_verify_current_freq(policy, false);
 
 	if (policy->governor->start) {
 		ret = policy->governor->start(policy);
@@ -2713,12 +2715,10 @@ static int cpufreq_set_policy(struct cpufreq_policy *policy,
 	pr_debug("starting governor %s failed\n", policy->governor->name);
 	if (old_gov) {
 		policy->governor = old_gov;
-		if (cpufreq_init_governor(policy)) {
+		if (cpufreq_init_governor(policy))
 			policy->governor = NULL;
-		} else if (cpufreq_start_governor(policy)) {
-			cpufreq_exit_governor(policy);
-			policy->governor = NULL;
-		}
+		else
+			cpufreq_start_governor(policy);
 	}
 
 	return ret;
@@ -2944,6 +2944,15 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
 	cpufreq_driver = driver_data;
 	write_unlock_irqrestore(&cpufreq_driver_lock, flags);
 
+	/*
+	 * Mark support for the scheduler's frequency invariance engine for
+	 * drivers that implement target(), target_index() or fast_switch().
+	 */
+	if (!cpufreq_driver->setpolicy) {
+		static_branch_enable_cpuslocked(&cpufreq_freq_invariance);
+		pr_debug("supports frequency invariance");
+	}
+
 	if (driver_data->setpolicy)
 		driver_data->flags |= CPUFREQ_CONST_LOOPS;
 
@@ -2973,15 +2982,6 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
 		goto err_if_unreg;
 	hp_online = ret;
 	ret = 0;
-
-	/*
-	 * Mark support for the scheduler's frequency invariance engine for
-	 * drivers that implement target(), target_index() or fast_switch().
-	 */
-	if (!cpufreq_driver->setpolicy) {
-		static_branch_enable_cpuslocked(&cpufreq_freq_invariance);
-		pr_debug("supports frequency invariance");
-	}
 
 	pr_debug("driver %s up and running\n", driver_data->name);
 	goto out;

@@ -420,8 +420,6 @@ struct btrfs_commit_stats {
 	u64 last_commit_dur;
 	/* The total commit duration in ns */
 	u64 total_commit_dur;
-	/* Start of the last critical section in ns. */
-	u64 critical_section_start_time;
 };
 
 struct btrfs_fs_info {
@@ -715,6 +713,8 @@ struct btrfs_fs_info {
 	u32 data_chunk_allocations;
 	u32 metadata_ratio;
 
+	void *bdev_holder;
+
 	/* Private scrub information */
 	struct mutex scrub_lock;
 	atomic_t scrubs_running;
@@ -737,6 +737,12 @@ struct btrfs_fs_info {
 	/* Holds configuration and tracking. Protected by qgroup_lock. */
 	struct rb_root qgroup_tree;
 	spinlock_t qgroup_lock;
+
+	/*
+	 * Used to avoid frequently calling ulist_alloc()/ulist_free()
+	 * when doing qgroup accounting, it must be protected by qgroup_lock.
+	 */
+	struct ulist *qgroup_ulist;
 
 	/*
 	 * Protect user change for quota operations. If a transaction is needed,
@@ -773,7 +779,7 @@ struct btrfs_fs_info {
 
 	struct btrfs_delayed_root *delayed_root;
 
-	/* Entries are eb->start >> nodesize_bits */
+	/* Entries are eb->start / sectorsize */
 	struct xarray buffer_tree;
 
 	/* Next backup root to be overwritten */
@@ -805,7 +811,6 @@ struct btrfs_fs_info {
 
 	/* Cached block sizes */
 	u32 nodesize;
-	u32 nodesize_bits;
 	u32 sectorsize;
 	/* ilog2 of sectorsize, use to avoid 64bit division */
 	u32 sectorsize_bits;

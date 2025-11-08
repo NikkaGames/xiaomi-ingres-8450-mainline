@@ -1298,19 +1298,19 @@ static const char *f2fs_encrypted_get_link(struct dentry *dentry,
 					   struct inode *inode,
 					   struct delayed_call *done)
 {
-	struct folio *folio;
+	struct page *page;
 	const char *target;
 
 	if (!dentry)
 		return ERR_PTR(-ECHILD);
 
-	folio = read_mapping_folio(inode->i_mapping, 0, NULL);
-	if (IS_ERR(folio))
-		return ERR_CAST(folio);
+	page = read_mapping_page(inode->i_mapping, 0, NULL);
+	if (IS_ERR(page))
+		return ERR_CAST(page);
 
-	target = fscrypt_get_symlink(inode, folio_address(folio),
+	target = fscrypt_get_symlink(inode, page_address(page),
 				     inode->i_sb->s_blocksize, done);
-	folio_put(folio);
+	put_page(page);
 	return target;
 }
 

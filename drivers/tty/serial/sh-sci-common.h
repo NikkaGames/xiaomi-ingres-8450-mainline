@@ -5,11 +5,6 @@
 
 #include <linux/serial_core.h>
 
-/* Private port IDs */
-enum SCI_PORT_TYPE {
-	SCI_PORT_RSCI = BIT(7) | 0,
-};
-
 enum SCI_CLKS {
 	SCI_FCK,		/* Functional Clock */
 	SCI_SCK,		/* Optional External Clock */
@@ -146,9 +141,6 @@ struct sci_port {
 	struct timer_list		rx_fifo_timer;
 	int				rx_fifo_timeout;
 	u16				hscif_tot;
-
-	u8				type;
-	u8				regtype;
 
 	const struct sci_port_ops *ops;
 

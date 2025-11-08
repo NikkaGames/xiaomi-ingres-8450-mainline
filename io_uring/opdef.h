@@ -38,7 +38,6 @@ struct io_issue_def {
 struct io_cold_def {
 	const char		*name;
 
-	void (*sqe_copy)(struct io_kiocb *);
 	void (*cleanup)(struct io_kiocb *);
 	void (*fail)(struct io_kiocb *);
 };

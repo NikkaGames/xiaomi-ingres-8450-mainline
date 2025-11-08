@@ -1129,12 +1129,12 @@ static void dcn10_destroy_resource_pool(struct resource_pool **pool)
 static enum dc_status dcn10_validate_bandwidth(
 		struct dc *dc,
 		struct dc_state *context,
-		enum dc_validate_mode validate_mode)
+		bool fast_validate)
 {
 	bool voltage_supported;
 
 	DC_FP_START();
-	voltage_supported = dcn_validate_bandwidth(dc, context, validate_mode);
+	voltage_supported = dcn_validate_bandwidth(dc, context, fast_validate);
 	DC_FP_END();
 
 	return voltage_supported ? DC_OK : DC_FAIL_BANDWIDTH_VALIDATE;

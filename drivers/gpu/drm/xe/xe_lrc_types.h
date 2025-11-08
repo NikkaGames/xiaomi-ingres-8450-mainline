@@ -22,15 +22,14 @@ struct xe_lrc {
 	 */
 	struct xe_bo *bo;
 
-	/** @size: size of the lrc and optional indirect ring state */
+	/** @size: size of lrc including any indirect ring state page */
 	u32 size;
 
 	/** @gt: gt which this LRC belongs to */
 	struct xe_gt *gt;
 
 	/** @flags: LRC flags */
-#define XE_LRC_FLAG_INDIRECT_CTX		0x1
-#define XE_LRC_FLAG_INDIRECT_RING_STATE		0x2
+#define XE_LRC_FLAG_INDIRECT_RING_STATE		0x1
 	u32 flags;
 
 	/** @refcount: ref count of this lrc */

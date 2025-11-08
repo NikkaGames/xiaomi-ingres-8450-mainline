@@ -36,7 +36,6 @@
 #include <drm/drm_writeback.h>
 #include <drm/drm_vblank.h>
 
-#include <linux/export.h>
 #include <linux/dma-fence.h>
 #include <linux/uaccess.h>
 #include <linux/sync_file.h>

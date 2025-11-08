@@ -4501,8 +4501,6 @@ static int ext4_alloc_file_blocks(struct file *file, ext4_lblk_t offset,
 	struct ext4_map_blocks map;
 	unsigned int credits;
 	loff_t epos, old_size = i_size_read(inode);
-	unsigned int blkbits = inode->i_blkbits;
-	bool alloc_zero = false;
 
 	BUG_ON(!ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS));
 	map.m_lblk = offset;
@@ -4514,17 +4512,6 @@ static int ext4_alloc_file_blocks(struct file *file, ext4_lblk_t offset,
 	 */
 	if (len <= EXT_UNWRITTEN_MAX_LEN)
 		flags |= EXT4_GET_BLOCKS_NO_NORMALIZE;
-
-	/*
-	 * Do the actual write zero during a running journal transaction
-	 * costs a lot. First allocate an unwritten extent and then
-	 * convert it to written after zeroing it out.
-	 */
-	if (flags & EXT4_GET_BLOCKS_ZERO) {
-		flags &= ~EXT4_GET_BLOCKS_ZERO;
-		flags |= EXT4_GET_BLOCKS_UNWRIT_EXT;
-		alloc_zero = true;
-	}
 
 	/*
 	 * credits to insert 1 extent into extent tree
@@ -4562,7 +4549,9 @@ retry:
 		 * allow a full retry cycle for any remaining allocations
 		 */
 		retries = 0;
-		epos = (loff_t)(map.m_lblk + ret) << blkbits;
+		map.m_lblk += ret;
+		map.m_len = len = len - ret;
+		epos = (loff_t)map.m_lblk << inode->i_blkbits;
 		inode_set_ctime_current(inode);
 		if (new_size) {
 			if (epos > new_size)
@@ -4582,21 +4571,6 @@ retry:
 		ret2 = ret3 ? ret3 : ret2;
 		if (unlikely(ret2))
 			break;
-
-		if (alloc_zero &&
-		    (map.m_flags & (EXT4_MAP_MAPPED | EXT4_MAP_UNWRITTEN))) {
-			ret2 = ext4_issue_zeroout(inode, map.m_lblk, map.m_pblk,
-						  map.m_len);
-			if (likely(!ret2))
-				ret2 = ext4_convert_unwritten_extents(NULL,
-					inode, (loff_t)map.m_lblk << blkbits,
-					(loff_t)map.m_len << blkbits);
-			if (ret2)
-				break;
-		}
-
-		map.m_lblk += ret;
-		map.m_len = len = len - ret;
 	}
 	if (ret == -ENOSPC && ext4_should_retry_alloc(inode->i_sb, &retries))
 		goto retry;
@@ -4662,11 +4636,7 @@ static long ext4_zero_range(struct file *file, loff_t offset,
 	if (end_lblk > start_lblk) {
 		ext4_lblk_t zero_blks = end_lblk - start_lblk;
 
-		if (mode & FALLOC_FL_WRITE_ZEROES)
-			flags = EXT4_GET_BLOCKS_CREATE_ZERO | EXT4_EX_NOCACHE;
-		else
-			flags |= (EXT4_GET_BLOCKS_CONVERT_UNWRITTEN |
-				  EXT4_EX_NOCACHE);
+		flags |= (EXT4_GET_BLOCKS_CONVERT_UNWRITTEN | EXT4_EX_NOCACHE);
 		ret = ext4_alloc_file_blocks(file, start_lblk, zero_blks,
 					     new_size, flags);
 		if (ret)
@@ -4775,18 +4745,11 @@ long ext4_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 	if (IS_ENCRYPTED(inode) &&
 	    (mode & (FALLOC_FL_COLLAPSE_RANGE | FALLOC_FL_INSERT_RANGE)))
 		return -EOPNOTSUPP;
-	/*
-	 * Don't allow writing zeroes if the underlying device does not
-	 * enable the unmap write zeroes operation.
-	 */
-	if ((mode & FALLOC_FL_WRITE_ZEROES) &&
-	    !bdev_write_zeroes_unmap_sectors(inode->i_sb->s_bdev))
-		return -EOPNOTSUPP;
 
 	/* Return error if mode is not supported */
 	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE |
-		     FALLOC_FL_ZERO_RANGE | FALLOC_FL_COLLAPSE_RANGE |
-		     FALLOC_FL_INSERT_RANGE | FALLOC_FL_WRITE_ZEROES))
+		     FALLOC_FL_COLLAPSE_RANGE | FALLOC_FL_ZERO_RANGE |
+		     FALLOC_FL_INSERT_RANGE))
 		return -EOPNOTSUPP;
 
 	inode_lock(inode);
@@ -4817,23 +4780,16 @@ long ext4_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 	if (ret)
 		goto out_invalidate_lock;
 
-	switch (mode & FALLOC_FL_MODE_MASK) {
-	case FALLOC_FL_PUNCH_HOLE:
+	if (mode & FALLOC_FL_PUNCH_HOLE)
 		ret = ext4_punch_hole(file, offset, len);
-		break;
-	case FALLOC_FL_COLLAPSE_RANGE:
+	else if (mode & FALLOC_FL_COLLAPSE_RANGE)
 		ret = ext4_collapse_range(file, offset, len);
-		break;
-	case FALLOC_FL_INSERT_RANGE:
+	else if (mode & FALLOC_FL_INSERT_RANGE)
 		ret = ext4_insert_range(file, offset, len);
-		break;
-	case FALLOC_FL_ZERO_RANGE:
-	case FALLOC_FL_WRITE_ZEROES:
+	else if (mode & FALLOC_FL_ZERO_RANGE)
 		ret = ext4_zero_range(file, offset, len, mode);
-		break;
-	default:
+	else
 		ret = -EOPNOTSUPP;
-	}
 
 out_invalidate_lock:
 	filemap_invalidate_unlock(mapping);
@@ -5215,7 +5171,7 @@ ext4_ext_shift_path_extents(struct ext4_ext_path *path, ext4_lblk_t shift,
 				credits = depth + 2;
 			}
 
-			restart_credits = ext4_chunk_trans_extent(inode, 0);
+			restart_credits = ext4_writepage_trans_blocks(inode);
 			err = ext4_datasem_ensure_credits(handle, inode, credits,
 					restart_credits, 0);
 			if (err) {
@@ -5475,7 +5431,7 @@ static int ext4_collapse_range(struct file *file, loff_t offset, loff_t len)
 
 	truncate_pagecache(inode, start);
 
-	credits = ext4_chunk_trans_extent(inode, 0);
+	credits = ext4_writepage_trans_blocks(inode);
 	handle = ext4_journal_start(inode, EXT4_HT_TRUNCATE, credits);
 	if (IS_ERR(handle))
 		return PTR_ERR(handle);
@@ -5571,7 +5527,7 @@ static int ext4_insert_range(struct file *file, loff_t offset, loff_t len)
 
 	truncate_pagecache(inode, start);
 
-	credits = ext4_chunk_trans_extent(inode, 0);
+	credits = ext4_writepage_trans_blocks(inode);
 	handle = ext4_journal_start(inode, EXT4_HT_TRUNCATE, credits);
 	if (IS_ERR(handle))
 		return PTR_ERR(handle);

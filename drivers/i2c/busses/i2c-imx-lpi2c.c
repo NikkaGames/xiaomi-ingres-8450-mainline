@@ -16,7 +16,6 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
-#include <linux/iopoll.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -188,46 +187,39 @@ struct lpi2c_imx_struct {
 	struct i2c_client	*target;
 };
 
-#define lpi2c_imx_read_msr_poll_timeout(atomic, val, cond)                    \
-	(atomic ? readl_poll_timeout_atomic(lpi2c_imx->base + LPI2C_MSR, val, \
-					    cond, 0, 500000) :                \
-		  readl_poll_timeout(lpi2c_imx->base + LPI2C_MSR, val, cond,  \
-				     0, 500000))
-
 static void lpi2c_imx_intctrl(struct lpi2c_imx_struct *lpi2c_imx,
 			      unsigned int enable)
 {
 	writel(enable, lpi2c_imx->base + LPI2C_MIER);
 }
 
-static int lpi2c_imx_bus_busy(struct lpi2c_imx_struct *lpi2c_imx, bool atomic)
+static int lpi2c_imx_bus_busy(struct lpi2c_imx_struct *lpi2c_imx)
 {
+	unsigned long orig_jiffies = jiffies;
 	unsigned int temp;
-	int err;
 
-	err = lpi2c_imx_read_msr_poll_timeout(atomic, temp,
-					      temp & (MSR_ALF | MSR_BBF | MSR_MBF));
+	while (1) {
+		temp = readl(lpi2c_imx->base + LPI2C_MSR);
 
-	/* check for arbitration lost, clear if set */
-	if (temp & MSR_ALF) {
-		writel(temp, lpi2c_imx->base + LPI2C_MSR);
-		return -EAGAIN;
-	}
+		/* check for arbitration lost, clear if set */
+		if (temp & MSR_ALF) {
+			writel(temp, lpi2c_imx->base + LPI2C_MSR);
+			return -EAGAIN;
+		}
 
-	/* check for bus not busy */
-	if (err) {
-		dev_dbg(&lpi2c_imx->adapter.dev, "bus not work\n");
-		if (lpi2c_imx->adapter.bus_recovery_info)
-			i2c_recover_bus(&lpi2c_imx->adapter);
-		return -ETIMEDOUT;
+		if (temp & (MSR_BBF | MSR_MBF))
+			break;
+
+		if (time_after(jiffies, orig_jiffies + msecs_to_jiffies(500))) {
+			dev_dbg(&lpi2c_imx->adapter.dev, "bus not work\n");
+			if (lpi2c_imx->adapter.bus_recovery_info)
+				i2c_recover_bus(&lpi2c_imx->adapter);
+			return -ETIMEDOUT;
+		}
+		schedule();
 	}
 
 	return 0;
-}
-
-static u32 lpi2c_imx_txfifo_cnt(struct lpi2c_imx_struct *lpi2c_imx)
-{
-	return readl(lpi2c_imx->base + LPI2C_MFSR) & 0xff;
 }
 
 static void lpi2c_imx_set_mode(struct lpi2c_imx_struct *lpi2c_imx)
@@ -250,7 +242,7 @@ static void lpi2c_imx_set_mode(struct lpi2c_imx_struct *lpi2c_imx)
 }
 
 static int lpi2c_imx_start(struct lpi2c_imx_struct *lpi2c_imx,
-			   struct i2c_msg *msgs, bool atomic)
+			   struct i2c_msg *msgs)
 {
 	unsigned int temp;
 
@@ -262,23 +254,30 @@ static int lpi2c_imx_start(struct lpi2c_imx_struct *lpi2c_imx,
 	temp = i2c_8bit_addr_from_msg(msgs) | (GEN_START << 8);
 	writel(temp, lpi2c_imx->base + LPI2C_MTDR);
 
-	return lpi2c_imx_bus_busy(lpi2c_imx, atomic);
+	return lpi2c_imx_bus_busy(lpi2c_imx);
 }
 
-static void lpi2c_imx_stop(struct lpi2c_imx_struct *lpi2c_imx, bool atomic)
+static void lpi2c_imx_stop(struct lpi2c_imx_struct *lpi2c_imx)
 {
+	unsigned long orig_jiffies = jiffies;
 	unsigned int temp;
-	int err;
 
 	writel(GEN_STOP << 8, lpi2c_imx->base + LPI2C_MTDR);
 
-	err = lpi2c_imx_read_msr_poll_timeout(atomic, temp, temp & MSR_SDF);
+	do {
+		temp = readl(lpi2c_imx->base + LPI2C_MSR);
+		if (temp & MSR_SDF)
+			break;
 
-	if (err) {
-		dev_dbg(&lpi2c_imx->adapter.dev, "stop timeout\n");
-		if (lpi2c_imx->adapter.bus_recovery_info)
-			i2c_recover_bus(&lpi2c_imx->adapter);
-	}
+		if (time_after(jiffies, orig_jiffies + msecs_to_jiffies(500))) {
+			dev_dbg(&lpi2c_imx->adapter.dev, "stop timeout\n");
+			if (lpi2c_imx->adapter.bus_recovery_info)
+				i2c_recover_bus(&lpi2c_imx->adapter);
+			break;
+		}
+		schedule();
+
+	} while (1);
 }
 
 /* CLKLO = I2C_CLK_RATIO * CLKHI, SETHOLD = CLKHI, DATAVD = CLKHI/2 */
@@ -392,25 +391,28 @@ static int lpi2c_imx_pio_msg_complete(struct lpi2c_imx_struct *lpi2c_imx)
 	return time_left ? 0 : -ETIMEDOUT;
 }
 
-static int lpi2c_imx_txfifo_empty(struct lpi2c_imx_struct *lpi2c_imx, bool atomic)
+static int lpi2c_imx_txfifo_empty(struct lpi2c_imx_struct *lpi2c_imx)
 {
-	unsigned int temp;
-	int err;
+	unsigned long orig_jiffies = jiffies;
+	u32 txcnt;
 
-	err = lpi2c_imx_read_msr_poll_timeout(atomic, temp,
-					      (temp & MSR_NDF) || !lpi2c_imx_txfifo_cnt(lpi2c_imx));
+	do {
+		txcnt = readl(lpi2c_imx->base + LPI2C_MFSR) & 0xff;
 
-	if (temp & MSR_NDF) {
-		dev_dbg(&lpi2c_imx->adapter.dev, "NDF detected\n");
-		return -EIO;
-	}
+		if (readl(lpi2c_imx->base + LPI2C_MSR) & MSR_NDF) {
+			dev_dbg(&lpi2c_imx->adapter.dev, "NDF detected\n");
+			return -EIO;
+		}
 
-	if (err) {
-		dev_dbg(&lpi2c_imx->adapter.dev, "txfifo empty timeout\n");
-		if (lpi2c_imx->adapter.bus_recovery_info)
-			i2c_recover_bus(&lpi2c_imx->adapter);
-		return -ETIMEDOUT;
-	}
+		if (time_after(jiffies, orig_jiffies + msecs_to_jiffies(500))) {
+			dev_dbg(&lpi2c_imx->adapter.dev, "txfifo empty timeout\n");
+			if (lpi2c_imx->adapter.bus_recovery_info)
+				i2c_recover_bus(&lpi2c_imx->adapter);
+			return -ETIMEDOUT;
+		}
+		schedule();
+
+	} while (txcnt);
 
 	return 0;
 }
@@ -434,7 +436,7 @@ static void lpi2c_imx_set_rx_watermark(struct lpi2c_imx_struct *lpi2c_imx)
 	writel(temp << 16, lpi2c_imx->base + LPI2C_MFCR);
 }
 
-static bool lpi2c_imx_write_txfifo(struct lpi2c_imx_struct *lpi2c_imx, bool atomic)
+static void lpi2c_imx_write_txfifo(struct lpi2c_imx_struct *lpi2c_imx)
 {
 	unsigned int data, txcnt;
 
@@ -449,19 +451,13 @@ static bool lpi2c_imx_write_txfifo(struct lpi2c_imx_struct *lpi2c_imx, bool atom
 		txcnt++;
 	}
 
-	if (lpi2c_imx->delivered < lpi2c_imx->msglen) {
-		if (!atomic)
-			lpi2c_imx_intctrl(lpi2c_imx, MIER_TDIE | MIER_NDIE);
-		return false;
-	}
-
-	if (!atomic)
+	if (lpi2c_imx->delivered < lpi2c_imx->msglen)
+		lpi2c_imx_intctrl(lpi2c_imx, MIER_TDIE | MIER_NDIE);
+	else
 		complete(&lpi2c_imx->complete);
-
-	return true;
 }
 
-static bool lpi2c_imx_read_rxfifo(struct lpi2c_imx_struct *lpi2c_imx, bool atomic)
+static void lpi2c_imx_read_rxfifo(struct lpi2c_imx_struct *lpi2c_imx)
 {
 	unsigned int blocklen, remaining;
 	unsigned int temp, data;
@@ -486,9 +482,8 @@ static bool lpi2c_imx_read_rxfifo(struct lpi2c_imx_struct *lpi2c_imx, bool atomi
 	remaining = lpi2c_imx->msglen - lpi2c_imx->delivered;
 
 	if (!remaining) {
-		if (!atomic)
-			complete(&lpi2c_imx->complete);
-		return true;
+		complete(&lpi2c_imx->complete);
+		return;
 	}
 
 	/* not finished, still waiting for rx data */
@@ -506,10 +501,7 @@ static bool lpi2c_imx_read_rxfifo(struct lpi2c_imx_struct *lpi2c_imx, bool atomi
 		writel(temp, lpi2c_imx->base + LPI2C_MTDR);
 	}
 
-	if (!atomic)
-		lpi2c_imx_intctrl(lpi2c_imx, MIER_RDIE);
-
-	return false;
+	lpi2c_imx_intctrl(lpi2c_imx, MIER_RDIE);
 }
 
 static void lpi2c_imx_write(struct lpi2c_imx_struct *lpi2c_imx,
@@ -517,29 +509,11 @@ static void lpi2c_imx_write(struct lpi2c_imx_struct *lpi2c_imx,
 {
 	lpi2c_imx->tx_buf = msgs->buf;
 	lpi2c_imx_set_tx_watermark(lpi2c_imx);
-	lpi2c_imx_write_txfifo(lpi2c_imx, false);
+	lpi2c_imx_write_txfifo(lpi2c_imx);
 }
 
-static int lpi2c_imx_write_atomic(struct lpi2c_imx_struct *lpi2c_imx,
-				  struct i2c_msg *msgs)
-{
-	u32 temp;
-	int err;
-
-	lpi2c_imx->tx_buf = msgs->buf;
-
-	err = lpi2c_imx_read_msr_poll_timeout(true, temp,
-					      (temp & MSR_NDF) ||
-					      lpi2c_imx_write_txfifo(lpi2c_imx, true));
-
-	if (temp & MSR_NDF)
-		return -EIO;
-
-	return err;
-}
-
-static void lpi2c_imx_read_init(struct lpi2c_imx_struct *lpi2c_imx,
-				struct i2c_msg *msgs)
+static void lpi2c_imx_read(struct lpi2c_imx_struct *lpi2c_imx,
+			   struct i2c_msg *msgs)
 {
 	unsigned int temp;
 
@@ -550,43 +524,8 @@ static void lpi2c_imx_read_init(struct lpi2c_imx_struct *lpi2c_imx,
 	temp = msgs->len > CHUNK_DATA ? CHUNK_DATA - 1 : msgs->len - 1;
 	temp |= (RECV_DATA << 8);
 	writel(temp, lpi2c_imx->base + LPI2C_MTDR);
-}
 
-static bool lpi2c_imx_read_chunk_atomic(struct lpi2c_imx_struct *lpi2c_imx)
-{
-	u32 rxcnt;
-
-	rxcnt = (readl(lpi2c_imx->base + LPI2C_MFSR) >> 16) & 0xFF;
-	if (!rxcnt)
-		return false;
-
-	if (!lpi2c_imx_read_rxfifo(lpi2c_imx, true))
-		return false;
-
-	return true;
-}
-
-static int lpi2c_imx_read_atomic(struct lpi2c_imx_struct *lpi2c_imx,
-				 struct i2c_msg *msgs)
-{
-	u32 temp;
-	int tmo_us;
-
-	tmo_us = 1000000;
-	do {
-		if (lpi2c_imx_read_chunk_atomic(lpi2c_imx))
-			return 0;
-
-		temp = readl(lpi2c_imx->base + LPI2C_MSR);
-
-		if (temp & MSR_NDF)
-			return -EIO;
-
-		udelay(100);
-		tmo_us -= 100;
-	} while (tmo_us > 0);
-
-	return -ETIMEDOUT;
+	lpi2c_imx_intctrl(lpi2c_imx, MIER_RDIE | MIER_NDIE);
 }
 
 static bool is_use_dma(struct lpi2c_imx_struct *lpi2c_imx, struct i2c_msg *msg)
@@ -606,25 +545,12 @@ static int lpi2c_imx_pio_xfer(struct lpi2c_imx_struct *lpi2c_imx,
 {
 	reinit_completion(&lpi2c_imx->complete);
 
-	if (msg->flags & I2C_M_RD) {
-		lpi2c_imx_read_init(lpi2c_imx, msg);
-		lpi2c_imx_intctrl(lpi2c_imx, MIER_RDIE | MIER_NDIE);
-	} else {
+	if (msg->flags & I2C_M_RD)
+		lpi2c_imx_read(lpi2c_imx, msg);
+	else
 		lpi2c_imx_write(lpi2c_imx, msg);
-	}
 
 	return lpi2c_imx_pio_msg_complete(lpi2c_imx);
-}
-
-static int lpi2c_imx_pio_xfer_atomic(struct lpi2c_imx_struct *lpi2c_imx,
-				     struct i2c_msg *msg)
-{
-	if (msg->flags & I2C_M_RD) {
-		lpi2c_imx_read_init(lpi2c_imx, msg);
-		return lpi2c_imx_read_atomic(lpi2c_imx, msg);
-	}
-
-	return lpi2c_imx_write_atomic(lpi2c_imx, msg);
 }
 
 static int lpi2c_imx_dma_timeout_calculate(struct lpi2c_imx_struct *lpi2c_imx)
@@ -637,7 +563,7 @@ static int lpi2c_imx_dma_timeout_calculate(struct lpi2c_imx_struct *lpi2c_imx)
 	time += 1;
 
 	/* Double calculated time */
-	return secs_to_jiffies(time);
+	return msecs_to_jiffies(time * MSEC_PER_SEC);
 }
 
 static int lpi2c_imx_alloc_rx_cmd_buf(struct lpi2c_imx_struct *lpi2c_imx)
@@ -1021,8 +947,8 @@ disable_dma:
 	return ret;
 }
 
-static int lpi2c_imx_xfer_common(struct i2c_adapter *adapter,
-				 struct i2c_msg *msgs, int num, bool atomic)
+static int lpi2c_imx_xfer(struct i2c_adapter *adapter,
+			  struct i2c_msg *msgs, int num)
 {
 	struct lpi2c_imx_struct *lpi2c_imx = i2c_get_adapdata(adapter);
 	unsigned int temp;
@@ -1033,7 +959,7 @@ static int lpi2c_imx_xfer_common(struct i2c_adapter *adapter,
 		return result;
 
 	for (i = 0; i < num; i++) {
-		result = lpi2c_imx_start(lpi2c_imx, &msgs[i], atomic);
+		result = lpi2c_imx_start(lpi2c_imx, &msgs[i]);
 		if (result)
 			goto disable;
 
@@ -1045,33 +971,28 @@ static int lpi2c_imx_xfer_common(struct i2c_adapter *adapter,
 		lpi2c_imx->tx_buf = NULL;
 		lpi2c_imx->delivered = 0;
 		lpi2c_imx->msglen = msgs[i].len;
+		init_completion(&lpi2c_imx->complete);
 
-		if (atomic) {
-			result = lpi2c_imx_pio_xfer_atomic(lpi2c_imx, &msgs[i]);
-		} else {
-			init_completion(&lpi2c_imx->complete);
-
-			if (is_use_dma(lpi2c_imx, &msgs[i])) {
-				result = lpi2c_imx_dma_xfer(lpi2c_imx, &msgs[i]);
-				if (result && lpi2c_imx->dma->using_pio_mode)
-					result = lpi2c_imx_pio_xfer(lpi2c_imx, &msgs[i]);
-			} else {
+		if (is_use_dma(lpi2c_imx, &msgs[i])) {
+			result = lpi2c_imx_dma_xfer(lpi2c_imx, &msgs[i]);
+			if (result && lpi2c_imx->dma->using_pio_mode)
 				result = lpi2c_imx_pio_xfer(lpi2c_imx, &msgs[i]);
-			}
+		} else {
+			result = lpi2c_imx_pio_xfer(lpi2c_imx, &msgs[i]);
 		}
 
 		if (result)
 			goto stop;
 
 		if (!(msgs[i].flags & I2C_M_RD)) {
-			result = lpi2c_imx_txfifo_empty(lpi2c_imx, atomic);
+			result = lpi2c_imx_txfifo_empty(lpi2c_imx);
 			if (result)
 				goto stop;
 		}
 	}
 
 stop:
-	lpi2c_imx_stop(lpi2c_imx, atomic);
+	lpi2c_imx_stop(lpi2c_imx);
 
 	temp = readl(lpi2c_imx->base + LPI2C_MSR);
 	if ((temp & MSR_NDF) && !result)
@@ -1085,16 +1006,6 @@ disable:
 		(result < 0) ? result : num);
 
 	return (result < 0) ? result : num;
-}
-
-static int lpi2c_imx_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, int num)
-{
-	return lpi2c_imx_xfer_common(adapter, msgs, num, false);
-}
-
-static int lpi2c_imx_xfer_atomic(struct i2c_adapter *adapter, struct i2c_msg *msgs, int num)
-{
-	return lpi2c_imx_xfer_common(adapter, msgs, num, true);
 }
 
 static irqreturn_t lpi2c_imx_target_isr(struct lpi2c_imx_struct *lpi2c_imx,
@@ -1159,9 +1070,9 @@ static irqreturn_t lpi2c_imx_master_isr(struct lpi2c_imx_struct *lpi2c_imx)
 	if (temp & MSR_NDF)
 		complete(&lpi2c_imx->complete);
 	else if (temp & MSR_RDF)
-		lpi2c_imx_read_rxfifo(lpi2c_imx, false);
+		lpi2c_imx_read_rxfifo(lpi2c_imx);
 	else if (temp & MSR_TDF)
-		lpi2c_imx_write_txfifo(lpi2c_imx, false);
+		lpi2c_imx_write_txfifo(lpi2c_imx);
 
 	return IRQ_HANDLED;
 }
@@ -1358,7 +1269,6 @@ static u32 lpi2c_imx_func(struct i2c_adapter *adapter)
 
 static const struct i2c_algorithm lpi2c_imx_algo = {
 	.xfer = lpi2c_imx_xfer,
-	.xfer_atomic = lpi2c_imx_xfer_atomic,
 	.functionality = lpi2c_imx_func,
 	.reg_target = lpi2c_imx_register_target,
 	.unreg_target = lpi2c_imx_unregister_target,

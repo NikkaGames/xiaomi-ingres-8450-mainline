@@ -463,8 +463,7 @@ int amdgpu_jpeg_reg_dump_init(struct amdgpu_device *adev,
 	adev->jpeg.ip_dump = kcalloc(adev->jpeg.num_jpeg_inst * count,
 				     sizeof(uint32_t), GFP_KERNEL);
 	if (!adev->jpeg.ip_dump) {
-		dev_err(adev->dev,
-			"Failed to allocate memory for JPEG IP Dump\n");
+		DRM_ERROR("Failed to allocate memory for JPEG IP Dump\n");
 		return -ENOMEM;
 	}
 	adev->jpeg.reg_list = reg;

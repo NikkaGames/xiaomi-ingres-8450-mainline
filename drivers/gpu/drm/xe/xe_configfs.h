@@ -5,7 +5,6 @@
 #ifndef _XE_CONFIGFS_H_
 #define _XE_CONFIGFS_H_
 
-#include <linux/limits.h>
 #include <linux/types.h>
 
 struct pci_dev;
@@ -15,13 +14,11 @@ int xe_configfs_init(void);
 void xe_configfs_exit(void);
 bool xe_configfs_get_survivability_mode(struct pci_dev *pdev);
 void xe_configfs_clear_survivability_mode(struct pci_dev *pdev);
-u64 xe_configfs_get_engines_allowed(struct pci_dev *pdev);
 #else
-static inline int xe_configfs_init(void) { return 0; }
-static inline void xe_configfs_exit(void) { }
-static inline bool xe_configfs_get_survivability_mode(struct pci_dev *pdev) { return false; }
-static inline void xe_configfs_clear_survivability_mode(struct pci_dev *pdev) { }
-static inline u64 xe_configfs_get_engines_allowed(struct pci_dev *pdev) { return U64_MAX; }
+static inline int xe_configfs_init(void) { return 0; };
+static inline void xe_configfs_exit(void) {};
+static inline bool xe_configfs_get_survivability_mode(struct pci_dev *pdev) { return false; };
+static inline void xe_configfs_clear_survivability_mode(struct pci_dev *pdev) {};
 #endif
 
 #endif

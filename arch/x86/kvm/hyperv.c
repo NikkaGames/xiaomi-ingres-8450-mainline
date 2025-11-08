@@ -497,19 +497,15 @@ static int synic_set_irq(struct kvm_vcpu_hv_synic *synic, u32 sint)
 	return ret;
 }
 
-int kvm_hv_synic_set_irq(struct kvm_kernel_irq_routing_entry *e, struct kvm *kvm,
-			 int irq_source_id, int level, bool line_status)
+int kvm_hv_synic_set_irq(struct kvm *kvm, u32 vpidx, u32 sint)
 {
 	struct kvm_vcpu_hv_synic *synic;
 
-	if (!level)
-		return -1;
-
-	synic = synic_get(kvm, e->hv_sint.vcpu);
+	synic = synic_get(kvm, vpidx);
 	if (!synic)
 		return -EINVAL;
 
-	return synic_set_irq(synic, e->hv_sint.sint);
+	return synic_set_irq(synic, sint);
 }
 
 void kvm_hv_synic_send_eoi(struct kvm_vcpu *vcpu, int vector)

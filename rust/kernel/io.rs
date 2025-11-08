@@ -5,12 +5,7 @@
 //! C header: [`include/asm-generic/io.h`](srctree/include/asm-generic/io.h)
 
 use crate::error::{code::EINVAL, Result};
-use crate::{bindings, build_assert, ffi::c_void};
-
-pub mod mem;
-pub mod resource;
-
-pub use resource::Resource;
+use crate::{bindings, build_assert};
 
 /// Raw representation of an MMIO region.
 ///
@@ -48,7 +43,7 @@ impl<const SIZE: usize> IoRaw<SIZE> {
     }
 }
 
-/// IO-mapped memory region.
+/// IO-mapped memory, starting at the base address @addr and spanning @maxlen bytes.
 ///
 /// The creator (usually a subsystem / bus such as PCI) is responsible for creating the
 /// mapping, performing an additional region request etc.
@@ -61,7 +56,7 @@ impl<const SIZE: usize> IoRaw<SIZE> {
 /// # Examples
 ///
 /// ```no_run
-/// # use kernel::{bindings, ffi::c_void, io::{Io, IoRaw}};
+/// # use kernel::{bindings, io::{Io, IoRaw}};
 /// # use core::ops::Deref;
 ///
 /// // See also [`pci::Bar`] for a real example.
@@ -75,19 +70,19 @@ impl<const SIZE: usize> IoRaw<SIZE> {
 ///     unsafe fn new(paddr: usize) -> Result<Self>{
 ///         // SAFETY: By the safety requirements of this function [`paddr`, `paddr` + `SIZE`) is
 ///         // valid for `ioremap`.
-///         let addr = unsafe { bindings::ioremap(paddr as bindings::phys_addr_t, SIZE) };
+///         let addr = unsafe { bindings::ioremap(paddr as _, SIZE as _) };
 ///         if addr.is_null() {
 ///             return Err(ENOMEM);
 ///         }
 ///
-///         Ok(IoMem(IoRaw::new(addr as usize, SIZE)?))
+///         Ok(IoMem(IoRaw::new(addr as _, SIZE)?))
 ///     }
 /// }
 ///
 /// impl<const SIZE: usize> Drop for IoMem<SIZE> {
 ///     fn drop(&mut self) {
 ///         // SAFETY: `self.0.addr()` is guaranteed to be properly mapped by `Self::new`.
-///         unsafe { bindings::iounmap(self.0.addr() as *mut c_void); };
+///         unsafe { bindings::iounmap(self.0.addr() as _); };
 ///     }
 /// }
 ///
@@ -124,7 +119,7 @@ macro_rules! define_read {
             let addr = self.io_addr_assert::<$type_name>(offset);
 
             // SAFETY: By the type invariant `addr` is a valid address for MMIO operations.
-            unsafe { bindings::$c_fn(addr as *const c_void) }
+            unsafe { bindings::$c_fn(addr as _) }
         }
 
         /// Read IO data from a given offset.
@@ -136,7 +131,7 @@ macro_rules! define_read {
             let addr = self.io_addr::<$type_name>(offset)?;
 
             // SAFETY: By the type invariant `addr` is a valid address for MMIO operations.
-            Ok(unsafe { bindings::$c_fn(addr as *const c_void) })
+            Ok(unsafe { bindings::$c_fn(addr as _) })
         }
     };
 }
@@ -153,7 +148,7 @@ macro_rules! define_write {
             let addr = self.io_addr_assert::<$type_name>(offset);
 
             // SAFETY: By the type invariant `addr` is a valid address for MMIO operations.
-            unsafe { bindings::$c_fn(value, addr as *mut c_void) }
+            unsafe { bindings::$c_fn(value, addr as _, ) }
         }
 
         /// Write IO data from a given offset.
@@ -165,7 +160,7 @@ macro_rules! define_write {
             let addr = self.io_addr::<$type_name>(offset)?;
 
             // SAFETY: By the type invariant `addr` is a valid address for MMIO operations.
-            unsafe { bindings::$c_fn(value, addr as *mut c_void) }
+            unsafe { bindings::$c_fn(value, addr as _) }
             Ok(())
         }
     };

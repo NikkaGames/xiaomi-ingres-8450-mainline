@@ -24,6 +24,7 @@
  *          Alex Deucher
  */
 
+#include <linux/export.h>
 #include <linux/pci.h>
 
 #include <drm/drm_edid.h>

@@ -510,15 +510,14 @@ static int btrfs_initxattrs(struct inode *inode,
 	 */
 	nofs_flag = memalloc_nofs_save();
 	for (xattr = xattr_array; xattr->name != NULL; xattr++) {
-		const size_t name_len = XATTR_SECURITY_PREFIX_LEN +
-					strlen(xattr->name) + 1;
-
-		name = kmalloc(name_len, GFP_KERNEL);
+		name = kmalloc(XATTR_SECURITY_PREFIX_LEN +
+			       strlen(xattr->name) + 1, GFP_KERNEL);
 		if (!name) {
 			ret = -ENOMEM;
 			break;
 		}
-		scnprintf(name, name_len, "%s%s", XATTR_SECURITY_PREFIX, xattr->name);
+		strcpy(name, XATTR_SECURITY_PREFIX);
+		strcpy(name + XATTR_SECURITY_PREFIX_LEN, xattr->name);
 
 		if (strcmp(name, XATTR_NAME_CAPS) == 0)
 			clear_bit(BTRFS_INODE_NO_CAP_XATTR, &BTRFS_I(inode)->runtime_flags);

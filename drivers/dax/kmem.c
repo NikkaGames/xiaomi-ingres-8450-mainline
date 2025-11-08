@@ -5,6 +5,7 @@
 #include <linux/memory.h>
 #include <linux/module.h>
 #include <linux/device.h>
+#include <linux/pfn_t.h>
 #include <linux/slab.h>
 #include <linux/dax.h>
 #include <linux/fs.h>

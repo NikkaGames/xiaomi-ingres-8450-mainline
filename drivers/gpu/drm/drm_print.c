@@ -25,7 +25,6 @@
 
 #include <linux/debugfs.h>
 #include <linux/dynamic_debug.h>
-#include <linux/export.h>
 #include <linux/io.h>
 #include <linux/moduleparam.h>
 #include <linux/seq_file.h>

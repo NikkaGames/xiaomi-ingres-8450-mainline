@@ -726,7 +726,7 @@ struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
 					  LINUX_MIB_TCPACKSKIPPEDSYNRECV,
 					  &tcp_rsk(req)->last_oow_ack_time) &&
 
-		    !tcp_rtx_synack(sk, req)) {
+		    !inet_rtx_syn_ack(sk, req)) {
 			unsigned long expires = jiffies;
 
 			expires += reqsk_timeout(req, TCP_RTO_MAX);

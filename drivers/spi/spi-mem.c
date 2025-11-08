@@ -265,9 +265,6 @@ static bool spi_mem_internal_supports_op(struct spi_mem *mem,
  */
 bool spi_mem_supports_op(struct spi_mem *mem, const struct spi_mem_op *op)
 {
-	/* Make sure the operation frequency is correct before going futher */
-	spi_mem_adjust_op_freq(mem, (struct spi_mem_op *)op);
-
 	if (spi_mem_check_op(op))
 		return false;
 
@@ -580,7 +577,6 @@ EXPORT_SYMBOL_GPL(spi_mem_adjust_op_freq);
  * spi_mem_calc_op_duration() - Derives the theoretical length (in ns) of an
  *			        operation. This helps finding the best variant
  *			        among a list of possible choices.
- * @mem: the SPI memory
  * @op: the operation to benchmark
  *
  * Some chips have per-op frequency limitations, PCBs usually have their own
@@ -590,26 +586,14 @@ EXPORT_SYMBOL_GPL(spi_mem_adjust_op_freq);
  * accurate, all these combinations should be rated (eg. with a time estimate)
  * and the best pick should be taken based on these calculations.
  *
- * Returns a ns estimate for the time this op would take, except if no
- * frequency limit has been set, in this case we return the number of
- * cycles nevertheless to allow callers to distinguish which operation
- * would be the fastest at iso-frequency.
+ * Returns a ns estimate for the time this op would take.
  */
-u64 spi_mem_calc_op_duration(struct spi_mem *mem, struct spi_mem_op *op)
+u64 spi_mem_calc_op_duration(struct spi_mem_op *op)
 {
 	u64 ncycles = 0;
-	u64 ps_per_cycles, duration;
+	u32 ns_per_cycles;
 
-	spi_mem_adjust_op_freq(mem, op);
-
-	if (op->max_freq) {
-		ps_per_cycles = 1000000000000ULL;
-		do_div(ps_per_cycles, op->max_freq);
-	} else {
-		/* In this case, the unit is no longer a time unit */
-		ps_per_cycles = 1;
-	}
-
+	ns_per_cycles = 1000000000 / op->max_freq;
 	ncycles += ((op->cmd.nbytes * 8) / op->cmd.buswidth) / (op->cmd.dtr ? 2 : 1);
 	ncycles += ((op->addr.nbytes * 8) / op->addr.buswidth) / (op->addr.dtr ? 2 : 1);
 
@@ -619,12 +603,7 @@ u64 spi_mem_calc_op_duration(struct spi_mem *mem, struct spi_mem_op *op)
 
 	ncycles += ((op->data.nbytes * 8) / op->data.buswidth) / (op->data.dtr ? 2 : 1);
 
-	/* Derive the duration in ps */
-	duration = ncycles * ps_per_cycles;
-	/* Convert into ns */
-	do_div(duration, 1000);
-
-	return duration;
+	return ncycles * ns_per_cycles;
 }
 EXPORT_SYMBOL_GPL(spi_mem_calc_op_duration);
 

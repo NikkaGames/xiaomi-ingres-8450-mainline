@@ -369,20 +369,23 @@ static int sca3000_write_ctrl_reg(struct sca3000_state *st,
 
 	ret = sca3000_reg_lock_on(st);
 	if (ret < 0)
-		return ret;
+		goto error_ret;
 	if (ret) {
 		ret = __sca3000_unlock_reg_lock(st);
 		if (ret)
-			return ret;
+			goto error_ret;
 	}
 
 	/* Set the control select register */
 	ret = sca3000_write_reg(st, SCA3000_REG_CTRL_SEL_ADDR, sel);
 	if (ret)
-		return ret;
+		goto error_ret;
 
 	/* Write the actual value into the register */
-	return sca3000_write_reg(st, SCA3000_REG_CTRL_DATA_ADDR, val);
+	ret = sca3000_write_reg(st, SCA3000_REG_CTRL_DATA_ADDR, val);
+
+error_ret:
+	return ret;
 }
 
 /**
@@ -399,20 +402,22 @@ static int sca3000_read_ctrl_reg(struct sca3000_state *st,
 
 	ret = sca3000_reg_lock_on(st);
 	if (ret < 0)
-		return ret;
+		goto error_ret;
 	if (ret) {
 		ret = __sca3000_unlock_reg_lock(st);
 		if (ret)
-			return ret;
+			goto error_ret;
 	}
 	/* Set the control select register */
 	ret = sca3000_write_reg(st, SCA3000_REG_CTRL_SEL_ADDR, ctrl_reg);
 	if (ret)
-		return ret;
+		goto error_ret;
 	ret = sca3000_read_data_short(st, SCA3000_REG_CTRL_DATA_ADDR, 1);
 	if (ret)
-		return ret;
+		goto error_ret;
 	return st->rx[0];
+error_ret:
+	return ret;
 }
 
 /**
@@ -572,8 +577,7 @@ static inline int __sca3000_get_base_freq(struct sca3000_state *st,
 
 	ret = sca3000_read_data_short(st, SCA3000_REG_MODE_ADDR, 1);
 	if (ret)
-		return ret;
-
+		goto error_ret;
 	switch (SCA3000_REG_MODE_MODE_MASK & st->rx[0]) {
 	case SCA3000_REG_MODE_MEAS_MODE_NORMAL:
 		*base_freq = info->measurement_mode_freq;
@@ -587,6 +591,7 @@ static inline int __sca3000_get_base_freq(struct sca3000_state *st,
 	default:
 		ret = -EINVAL;
 	}
+error_ret:
 	return ret;
 }
 
@@ -829,7 +834,7 @@ static ssize_t sca3000_read_av_freq(struct device *dev,
 	val = st->rx[0];
 	mutex_unlock(&st->lock);
 	if (ret)
-		return ret;
+		goto error_ret;
 
 	switch (val & SCA3000_REG_MODE_MODE_MASK) {
 	case SCA3000_REG_MODE_MEAS_MODE_NORMAL:
@@ -852,6 +857,8 @@ static ssize_t sca3000_read_av_freq(struct device *dev,
 		break;
 	}
 	return len;
+error_ret:
+	return ret;
 }
 
 /*

@@ -1745,14 +1745,9 @@ static int nvme_tcp_start_tls(struct nvme_ctrl *nctrl,
 			qid, ret);
 		tls_handshake_cancel(queue->sock->sk);
 	} else {
-		if (queue->tls_err) {
-			dev_err(nctrl->device,
-				"queue %d: TLS handshake complete, error %d\n",
-				qid, queue->tls_err);
-		} else {
-			dev_dbg(nctrl->device,
-				"queue %d: TLS handshake complete\n", qid);
-		}
+		dev_dbg(nctrl->device,
+			"queue %d: TLS handshake complete, error %d\n",
+			qid, queue->tls_err);
 		ret = queue->tls_err;
 	}
 	return ret;
@@ -2179,7 +2174,7 @@ static int nvme_tcp_configure_io_queues(struct nvme_ctrl *ctrl, bool new)
 
 	/*
 	 * Only start IO queues for which we have allocated the tagset
-	 * and limited it to the available queues. On reconnects, the
+	 * and limitted it to the available queues. On reconnects, the
 	 * queue number might have changed.
 	 */
 	nr_queues = min(ctrl->tagset->nr_hw_queues + 1, ctrl->queue_count);

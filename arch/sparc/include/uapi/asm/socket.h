@@ -145,9 +145,6 @@
 
 #define SO_PASSRIGHTS            0x005c
 
-#define SO_INQ                   0x005d
-#define SCM_INQ                  SO_INQ
-
 #if !defined(__KERNEL__)
 
 

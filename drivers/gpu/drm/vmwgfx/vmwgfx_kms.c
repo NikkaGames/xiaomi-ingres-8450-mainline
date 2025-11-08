@@ -500,7 +500,6 @@ static const struct drm_framebuffer_funcs vmw_framebuffer_surface_funcs = {
 static int vmw_kms_new_framebuffer_surface(struct vmw_private *dev_priv,
 					   struct vmw_user_object *uo,
 					   struct vmw_framebuffer **out,
-					   const struct drm_format_info *info,
 					   const struct drm_mode_fb_cmd2
 					   *mode_cmd)
 
@@ -549,7 +548,7 @@ static int vmw_kms_new_framebuffer_surface(struct vmw_private *dev_priv,
 		goto out_err1;
 	}
 
-	drm_helper_mode_fill_fb_struct(dev, &vfbs->base.base, info, mode_cmd);
+	drm_helper_mode_fill_fb_struct(dev, &vfbs->base.base, mode_cmd);
 	memcpy(&vfbs->uo, uo, sizeof(vfbs->uo));
 	vmw_user_object_ref(&vfbs->uo);
 
@@ -603,7 +602,6 @@ static const struct drm_framebuffer_funcs vmw_framebuffer_bo_funcs = {
 static int vmw_kms_new_framebuffer_bo(struct vmw_private *dev_priv,
 				      struct vmw_bo *bo,
 				      struct vmw_framebuffer **out,
-				      const struct drm_format_info *info,
 				      const struct drm_mode_fb_cmd2
 				      *mode_cmd)
 
@@ -636,7 +634,7 @@ static int vmw_kms_new_framebuffer_bo(struct vmw_private *dev_priv,
 	}
 
 	vfbd->base.base.obj[0] = &bo->tbo.base;
-	drm_helper_mode_fill_fb_struct(dev, &vfbd->base.base, info, mode_cmd);
+	drm_helper_mode_fill_fb_struct(dev, &vfbd->base.base, mode_cmd);
 	vfbd->base.bo = true;
 	vfbd->buffer = vmw_bo_reference(bo);
 	*out = &vfbd->base;
@@ -681,13 +679,11 @@ vmw_kms_srf_ok(struct vmw_private *dev_priv, uint32_t width, uint32_t height)
  * @dev_priv: Pointer to device private struct.
  * @uo: Pointer to user object to wrap the kms framebuffer around.
  * Either the buffer or surface inside the user object must be NULL.
- * @info: pixel format information.
  * @mode_cmd: Frame-buffer metadata.
  */
 struct vmw_framebuffer *
 vmw_kms_new_framebuffer(struct vmw_private *dev_priv,
 			struct vmw_user_object *uo,
-			const struct drm_format_info *info,
 			const struct drm_mode_fb_cmd2 *mode_cmd)
 {
 	struct vmw_framebuffer *vfb = NULL;
@@ -696,10 +692,10 @@ vmw_kms_new_framebuffer(struct vmw_private *dev_priv,
 	/* Create the new framebuffer depending one what we have */
 	if (vmw_user_object_surface(uo)) {
 		ret = vmw_kms_new_framebuffer_surface(dev_priv, uo, &vfb,
-						      info, mode_cmd);
+						      mode_cmd);
 	} else if (uo->buffer) {
 		ret = vmw_kms_new_framebuffer_bo(dev_priv, uo->buffer, &vfb,
-						 info, mode_cmd);
+						 mode_cmd);
 	} else {
 		BUG();
 	}
@@ -716,7 +712,6 @@ vmw_kms_new_framebuffer(struct vmw_private *dev_priv,
 
 static struct drm_framebuffer *vmw_kms_fb_create(struct drm_device *dev,
 						 struct drm_file *file_priv,
-						 const struct drm_format_info *info,
 						 const struct drm_mode_fb_cmd2 *mode_cmd)
 {
 	struct vmw_private *dev_priv = vmw_priv(dev);
@@ -746,7 +741,7 @@ static struct drm_framebuffer *vmw_kms_fb_create(struct drm_device *dev,
 	}
 
 
-	vfb = vmw_kms_new_framebuffer(dev_priv, &uo, info, mode_cmd);
+	vfb = vmw_kms_new_framebuffer(dev_priv, &uo, mode_cmd);
 	if (IS_ERR(vfb)) {
 		ret = PTR_ERR(vfb);
 		goto err_out;

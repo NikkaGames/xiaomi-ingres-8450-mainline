@@ -1405,20 +1405,23 @@ u64 tmigr_quick_check(u64 nextevt)
 		return KTIME_MAX;
 
 	do {
-		if (!tmigr_check_lonely(group))
+		if (!tmigr_check_lonely(group)) {
 			return KTIME_MAX;
-
-		/*
-		 * Since current CPU is active, events may not be sorted
-		 * from bottom to the top because the CPU's event is ignored
-		 * up to the top and its sibling's events not propagated upwards.
-		 * Thus keep track of the lowest observed expiry.
-		 */
-		nextevt = min_t(u64, nextevt, READ_ONCE(group->next_expiry));
+		} else {
+			/*
+			 * Since current CPU is active, events may not be sorted
+			 * from bottom to the top because the CPU's event is ignored
+			 * up to the top and its sibling's events not propagated upwards.
+			 * Thus keep track of the lowest observed expiry.
+			 */
+			nextevt = min_t(u64, nextevt, READ_ONCE(group->next_expiry));
+			if (!group->parent)
+				return nextevt;
+		}
 		group = group->parent;
 	} while (group);
 
-	return nextevt;
+	return KTIME_MAX;
 }
 
 /*

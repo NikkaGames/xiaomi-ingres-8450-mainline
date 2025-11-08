@@ -80,7 +80,7 @@
 #endif
 
 
-#ifdef __ASSEMBLER__
+#ifdef __ASSEMBLY__
 
 #define __pgprot(x)	(x)
 
@@ -172,7 +172,7 @@ static inline unsigned long ___pa(unsigned long va)
 #define page_to_virt(page)	__va(page_to_pfn(page) << PAGE_SHIFT)
 #define virt_addr_valid(kaddr)	pfn_valid(__pa(kaddr) >> PAGE_SHIFT)
 
-#endif /* __ASSEMBLER__ */
+#endif /* __ASSEMBLY__ */
 
 #include <asm-generic/memory_model.h>
 #endif /* _XTENSA_PAGE_H */

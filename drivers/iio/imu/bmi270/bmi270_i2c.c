@@ -4,7 +4,6 @@
 #include <linux/iio/iio.h>
 #include <linux/module.h>
 #include <linux/mod_devicetable.h>
-#include <linux/pm.h>
 #include <linux/regmap.h>
 
 #include "bmi270.h"
@@ -53,7 +52,6 @@ static const struct of_device_id bmi270_of_match[] = {
 static struct i2c_driver bmi270_i2c_driver = {
 	.driver = {
 		.name = "bmi270_i2c",
-		.pm = pm_ptr(&bmi270_core_pm_ops),
 		.acpi_match_table = bmi270_acpi_match,
 		.of_match_table = bmi270_of_match,
 	},

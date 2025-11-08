@@ -1372,7 +1372,7 @@ static int bcm2835_probe(struct platform_device *pdev)
 	int ret;
 
 	dev_dbg(dev, "%s\n", __func__);
-	mmc = devm_mmc_alloc_host(dev, sizeof(*host));
+	mmc = mmc_alloc_host(sizeof(*host), dev);
 	if (!mmc)
 		return -ENOMEM;
 
@@ -1451,6 +1451,7 @@ err:
 	dev_dbg(dev, "%s -> err %d\n", __func__, ret);
 	if (host->dma_chan_rxtx)
 		dma_release_channel(host->dma_chan_rxtx);
+	mmc_free_host(mmc);
 
 	return ret;
 }
@@ -1473,6 +1474,8 @@ static void bcm2835_remove(struct platform_device *pdev)
 
 	if (host->dma_chan_rxtx)
 		dma_release_channel(host->dma_chan_rxtx);
+
+	mmc_free_host(mmc);
 }
 
 static const struct of_device_id bcm2835_match[] = {

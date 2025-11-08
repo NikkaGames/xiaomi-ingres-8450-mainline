@@ -1193,10 +1193,9 @@ static int anx78xx_i2c_probe(struct i2c_client *client)
 	bool found = false;
 	int err;
 
-	anx78xx = devm_drm_bridge_alloc(&client->dev, struct anx78xx, bridge,
-					&anx78xx_bridge_funcs);
-	if (IS_ERR(anx78xx))
-		return PTR_ERR(anx78xx);
+	anx78xx = devm_kzalloc(&client->dev, sizeof(*anx78xx), GFP_KERNEL);
+	if (!anx78xx)
+		return -ENOMEM;
 
 	pdata = &anx78xx->pdata;
 
@@ -1306,6 +1305,8 @@ static int anx78xx_i2c_probe(struct i2c_client *client)
 		DRM_ERROR("Failed to request INTP threaded IRQ: %d\n", err);
 		goto err_poweroff;
 	}
+
+	anx78xx->bridge.funcs = &anx78xx_bridge_funcs;
 
 	drm_bridge_add(&anx78xx->bridge);
 

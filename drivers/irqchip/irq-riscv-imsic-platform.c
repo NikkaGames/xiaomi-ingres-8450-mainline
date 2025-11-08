@@ -307,10 +307,6 @@ static const struct msi_parent_ops imsic_msi_parent_ops = {
 
 int imsic_irqdomain_init(void)
 {
-	struct irq_domain_info info = {
-		.ops		= &imsic_base_domain_ops,
-		.host_data	= imsic,
-	};
 	struct imsic_global_config *global;
 
 	if (!imsic || !imsic->fwnode) {
@@ -324,12 +320,16 @@ int imsic_irqdomain_init(void)
 	}
 
 	/* Create Base IRQ domain */
-	info.fwnode = imsic->fwnode,
-	imsic->base_domain = msi_create_parent_irq_domain(&info, &imsic_msi_parent_ops);
+	imsic->base_domain = irq_domain_create_tree(imsic->fwnode,
+						    &imsic_base_domain_ops, imsic);
 	if (!imsic->base_domain) {
 		pr_err("%pfwP: failed to create IMSIC base domain\n", imsic->fwnode);
 		return -ENOMEM;
 	}
+	imsic->base_domain->flags |= IRQ_DOMAIN_FLAG_MSI_PARENT;
+	imsic->base_domain->msi_parent_ops = &imsic_msi_parent_ops;
+
+	irq_domain_update_bus_token(imsic->base_domain, DOMAIN_BUS_NEXUS);
 
 	global = &imsic->global;
 	pr_info("%pfwP:  hart-index-bits: %d,  guest-index-bits: %d\n",

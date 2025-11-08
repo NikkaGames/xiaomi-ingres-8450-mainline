@@ -8,8 +8,6 @@
  */
 
 #include "drm/drm_modeset_lock.h"
-
-#include <linux/export.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>

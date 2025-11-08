@@ -274,8 +274,7 @@ static int erofs_fscache_data_read_slice(struct erofs_fscache_rq *req)
 		size_t size = map.m_llen;
 		void *src;
 
-		src = erofs_read_metabuf(&buf, sb, map.m_pa,
-					 erofs_inode_in_metabox(inode));
+		src = erofs_read_metabuf(&buf, sb, map.m_pa, true);
 		if (IS_ERR(src))
 			return PTR_ERR(src);
 

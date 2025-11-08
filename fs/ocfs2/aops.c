@@ -1071,7 +1071,6 @@ static int ocfs2_grab_folios_for_write(struct address_space *mapping,
 			if (IS_ERR(wc->w_folios[i])) {
 				ret = PTR_ERR(wc->w_folios[i]);
 				mlog_errno(ret);
-				wc->w_folios[i] = NULL;
 				goto out;
 			}
 		}
@@ -1857,8 +1856,7 @@ out:
 	return ret;
 }
 
-static int ocfs2_write_begin(const struct kiocb *iocb,
-			     struct address_space *mapping,
+static int ocfs2_write_begin(struct file *file, struct address_space *mapping,
 			     loff_t pos, unsigned len,
 			     struct folio **foliop, void **fsdata)
 {
@@ -2049,8 +2047,7 @@ out:
 	return copied;
 }
 
-static int ocfs2_write_end(const struct kiocb *iocb,
-			   struct address_space *mapping,
+static int ocfs2_write_end(struct file *file, struct address_space *mapping,
 			   loff_t pos, unsigned len, unsigned copied,
 			   struct folio *folio, void *fsdata)
 {

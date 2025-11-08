@@ -636,9 +636,8 @@ struct amdgpu_display_manager {
 	 * @bb_from_dmub:
 	 *
 	 * Bounding box data read from dmub during early initialization for DCN4+
-	 * Data is stored as a byte array that should be casted to the appropriate bb struct
 	 */
-	void *bb_from_dmub;
+	struct dml2_soc_bb *bb_from_dmub;
 
 	/**
 	 * @oem_i2c:

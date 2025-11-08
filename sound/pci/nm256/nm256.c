@@ -1595,13 +1595,13 @@ static int snd_nm256_probe(struct pci_dev *pci,
 
 	switch (pci->device) {
 	case PCI_DEVICE_ID_NEOMAGIC_NM256AV_AUDIO:
-		strscpy(card->driver, "NM256AV");
+		strcpy(card->driver, "NM256AV");
 		break;
 	case PCI_DEVICE_ID_NEOMAGIC_NM256ZX_AUDIO:
-		strscpy(card->driver, "NM256ZX");
+		strcpy(card->driver, "NM256ZX");
 		break;
 	case PCI_DEVICE_ID_NEOMAGIC_NM256XL_PLUS_AUDIO:
-		strscpy(card->driver, "NM256XL+");
+		strcpy(card->driver, "NM256XL+");
 		break;
 	default:
 		dev_err(&pci->dev, "invalid device id 0x%x\n", pci->device);

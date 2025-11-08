@@ -200,7 +200,7 @@ struct audit_context {
 			int			argc;
 		} execve;
 		struct {
-			const char		*name;
+			char			*name;
 		} module;
 		struct {
 			struct audit_ntp_data	ntp_data;

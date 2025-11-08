@@ -78,10 +78,7 @@ int armada_fbdev_driver_fbdev_probe(struct drm_fb_helper *fbh,
 		return -ENOMEM;
 	}
 
-	dfb = armada_framebuffer_create(dev,
-					drm_get_format_info(dev, mode.pixel_format,
-							    mode.modifier[0]),
-					&mode, obj);
+	dfb = armada_framebuffer_create(dev, &mode, obj);
 
 	/*
 	 * A reference is now held by the framebuffer object if

@@ -62,11 +62,10 @@ impl Firmware {
     fn request_internal(name: &CStr, dev: &Device, func: FwFunc) -> Result<Self> {
         let mut fw: *mut bindings::firmware = core::ptr::null_mut();
         let pfw: *mut *mut bindings::firmware = &mut fw;
-        let pfw: *mut *const bindings::firmware = pfw.cast();
 
         // SAFETY: `pfw` is a valid pointer to a NULL initialized `bindings::firmware` pointer.
         // `name` and `dev` are valid as by their type invariants.
-        let ret = unsafe { func.0(pfw, name.as_char_ptr(), dev.as_raw()) };
+        let ret = unsafe { func.0(pfw as _, name.as_char_ptr(), dev.as_raw()) };
         if ret != 0 {
             return Err(Error::from_errno(ret));
         }
@@ -140,7 +139,7 @@ unsafe impl Sync for Firmware {}
 /// Typically, such contracts would be enforced by a trait, however traits do not (yet) support
 /// const functions.
 ///
-/// # Examples
+/// # Example
 ///
 /// ```
 /// # mod module_firmware_test {
@@ -182,7 +181,7 @@ unsafe impl Sync for Firmware {}
 /// module! {
 ///    type: MyModule,
 ///    name: "module_firmware_test",
-///    authors: ["Rust for Linux"],
+///    author: "Rust for Linux",
 ///    description: "module_firmware! test module",
 ///    license: "GPL",
 /// }
@@ -262,7 +261,7 @@ impl<const N: usize> ModInfoBuilder<N> {
     /// Append path components to the [`ModInfoBuilder`] instance. Paths need to be separated
     /// with [`ModInfoBuilder::new_entry`].
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// use kernel::firmware::ModInfoBuilder;

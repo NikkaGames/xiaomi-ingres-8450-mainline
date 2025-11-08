@@ -118,10 +118,9 @@ static int lvds_codec_probe(struct platform_device *pdev)
 	u32 val;
 	int ret;
 
-	lvds_codec = devm_drm_bridge_alloc(dev, struct lvds_codec, bridge,
-					   &funcs);
-	if (IS_ERR(lvds_codec))
-		return PTR_ERR(lvds_codec);
+	lvds_codec = devm_kzalloc(dev, sizeof(*lvds_codec), GFP_KERNEL);
+	if (!lvds_codec)
+		return -ENOMEM;
 
 	lvds_codec->dev = &pdev->dev;
 	lvds_codec->connector_type = (uintptr_t)of_device_get_match_data(dev);
@@ -156,6 +155,8 @@ static int lvds_codec_probe(struct platform_device *pdev)
 						lvds_codec->connector_type);
 	if (IS_ERR(lvds_codec->panel_bridge))
 		return PTR_ERR(lvds_codec->panel_bridge);
+
+	lvds_codec->bridge.funcs = &funcs;
 
 	/*
 	 * Decoder input LVDS format is a property of the decoder chip or even

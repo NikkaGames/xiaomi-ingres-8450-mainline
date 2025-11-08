@@ -461,7 +461,7 @@ static enum skb_state defer_bh(struct usbnet *dev, struct sk_buff *skb,
 
 	__skb_queue_tail(&dev->done, skb);
 	if (dev->done.qlen == 1)
-		queue_work(system_bh_wq, &dev->bh_work);
+		tasklet_schedule(&dev->bh);
 	spin_unlock(&dev->done.lock);
 	spin_unlock_irqrestore(&list->lock, flags);
 	return old_state;
@@ -549,7 +549,7 @@ static int rx_submit (struct usbnet *dev, struct urb *urb, gfp_t flags)
 		default:
 			netif_dbg(dev, rx_err, dev->net,
 				  "rx submit, %d\n", retval);
-			queue_work(system_bh_wq, &dev->bh_work);
+			tasklet_schedule (&dev->bh);
 			break;
 		case 0:
 			__usbnet_queue_skb(&dev->rxq, skb, rx_start);
@@ -709,7 +709,7 @@ void usbnet_resume_rx(struct usbnet *dev)
 		num++;
 	}
 
-	queue_work(system_bh_wq, &dev->bh_work);
+	tasklet_schedule(&dev->bh);
 
 	netif_dbg(dev, rx_status, dev->net,
 		  "paused rx queue disabled, %d skbs requeued\n", num);
@@ -778,7 +778,7 @@ void usbnet_unlink_rx_urbs(struct usbnet *dev)
 {
 	if (netif_running(dev->net)) {
 		(void) unlink_urbs (dev, &dev->rxq);
-		queue_work(system_bh_wq, &dev->bh_work);
+		tasklet_schedule(&dev->bh);
 	}
 }
 EXPORT_SYMBOL_GPL(usbnet_unlink_rx_urbs);
@@ -861,14 +861,14 @@ int usbnet_stop (struct net_device *net)
 	/* deferred work (timer, softirq, task) must also stop */
 	dev->flags = 0;
 	timer_delete_sync(&dev->delay);
-	cancel_work_sync(&dev->bh_work);
+	tasklet_kill(&dev->bh);
 	cancel_work_sync(&dev->kevent);
 
 	/* We have cyclic dependencies. Those calls are needed
 	 * to break a cycle. We cannot fall into the gaps because
 	 * we have a flag
 	 */
-	cancel_work_sync(&dev->bh_work);
+	tasklet_kill(&dev->bh);
 	timer_delete_sync(&dev->delay);
 	cancel_work_sync(&dev->kevent);
 
@@ -955,7 +955,7 @@ int usbnet_open (struct net_device *net)
 	clear_bit(EVENT_RX_KILL, &dev->flags);
 
 	// delay posting reads until we're fully open
-	queue_work(system_bh_wq, &dev->bh_work);
+	tasklet_schedule (&dev->bh);
 	if (info->manage_power) {
 		retval = info->manage_power(dev, 1);
 		if (retval < 0) {
@@ -1012,13 +1012,6 @@ int usbnet_get_link_ksettings_internal(struct net_device *net,
 		cmd->base.speed = dev->tx_speed / 1000000;
 	else
 		cmd->base.speed = SPEED_UNKNOWN;
-
-	/* The standard "Universal Serial Bus Class Definitions
-	 * for Communications Devices v1.2" does not specify
-	 * anything about duplex status.
-	 * So set it DUPLEX_UNKNOWN instead of default DUPLEX_HALF.
-	 */
-	cmd->base.duplex = DUPLEX_UNKNOWN;
 
 	return 0;
 }
@@ -1120,9 +1113,6 @@ static void __handle_link_change(struct usbnet *dev)
 	if (!test_bit(EVENT_DEV_OPEN, &dev->flags))
 		return;
 
-	if (test_and_clear_bit(EVENT_LINK_CARRIER_ON, &dev->flags))
-		netif_carrier_on(dev->net);
-
 	if (!netif_carrier_ok(dev->net)) {
 		/* kill URBs for reading packets to save bus bandwidth */
 		unlink_urbs(dev, &dev->rxq);
@@ -1133,7 +1123,7 @@ static void __handle_link_change(struct usbnet *dev)
 		 */
 	} else {
 		/* submitting URBs for reading packets */
-		queue_work(system_bh_wq, &dev->bh_work);
+		tasklet_schedule(&dev->bh);
 	}
 
 	/* hard_mtu or rx_urb_size may change during link change */
@@ -1208,11 +1198,11 @@ fail_halt:
 		} else {
 			clear_bit (EVENT_RX_HALT, &dev->flags);
 			if (!usbnet_going_away(dev))
-				queue_work(system_bh_wq, &dev->bh_work);
+				tasklet_schedule(&dev->bh);
 		}
 	}
 
-	/* work could resubmit itself forever if memory is tight */
+	/* tasklet could resubmit itself forever if memory is tight */
 	if (test_bit (EVENT_RX_MEMORY, &dev->flags)) {
 		struct urb	*urb = NULL;
 		int resched = 1;
@@ -1234,7 +1224,7 @@ fail_halt:
 fail_lowmem:
 			if (resched)
 				if (!usbnet_going_away(dev))
-					queue_work(system_bh_wq, &dev->bh_work);
+					tasklet_schedule(&dev->bh);
 		}
 	}
 
@@ -1335,7 +1325,7 @@ void usbnet_tx_timeout (struct net_device *net, unsigned int txqueue)
 	struct usbnet		*dev = netdev_priv(net);
 
 	unlink_urbs (dev, &dev->txq);
-	queue_work(system_bh_wq, &dev->bh_work);
+	tasklet_schedule (&dev->bh);
 	/* this needs to be handled individually because the generic layer
 	 * doesn't know what is sufficient and could not restore private
 	 * information if a remedy of an unconditional reset were used.
@@ -1557,7 +1547,7 @@ static inline void usb_free_skb(struct sk_buff *skb)
 
 /*-------------------------------------------------------------------------*/
 
-// work (work deferred from completions, in_irq) or timer
+// tasklet (work deferred from completions, in_irq) or timer
 
 static void usbnet_bh (struct timer_list *t)
 {
@@ -1611,16 +1601,16 @@ static void usbnet_bh (struct timer_list *t)
 					  "rxqlen %d --> %d\n",
 					  temp, dev->rxq.qlen);
 			if (dev->rxq.qlen < RX_QLEN(dev))
-				queue_work(system_bh_wq, &dev->bh_work);
+				tasklet_schedule (&dev->bh);
 		}
 		if (dev->txq.qlen < TX_QLEN (dev))
 			netif_wake_queue (dev->net);
 	}
 }
 
-static void usbnet_bh_work(struct work_struct *work)
+static void usbnet_bh_tasklet(struct tasklet_struct *t)
 {
-	struct usbnet *dev = from_work(dev, work, bh_work);
+	struct usbnet *dev = from_tasklet(dev, t, bh);
 
 	usbnet_bh(&dev->delay);
 }
@@ -1752,7 +1742,7 @@ usbnet_probe (struct usb_interface *udev, const struct usb_device_id *prod)
 	skb_queue_head_init (&dev->txq);
 	skb_queue_head_init (&dev->done);
 	skb_queue_head_init(&dev->rxq_pause);
-	INIT_WORK(&dev->bh_work, usbnet_bh_work);
+	tasklet_setup(&dev->bh, usbnet_bh_tasklet);
 	INIT_WORK (&dev->kevent, usbnet_deferred_kevent);
 	init_usb_anchor(&dev->deferred);
 	timer_setup(&dev->delay, usbnet_bh, 0);
@@ -1769,6 +1759,7 @@ usbnet_probe (struct usb_interface *udev, const struct usb_device_id *prod)
 	dev->hard_mtu = net->mtu + net->hard_header_len;
 	net->min_mtu = 0;
 	net->max_mtu = ETH_MAX_MTU;
+	net->pcpu_stat_type = NETDEV_PCPU_STAT_TSTATS;
 
 	net->netdev_ops = &usbnet_netdev_ops;
 	net->watchdog_timeo = TX_TIMEOUT_JIFFIES;
@@ -1980,7 +1971,7 @@ int usbnet_resume (struct usb_interface *intf)
 
 			if (!(dev->txq.qlen >= TX_QLEN(dev)))
 				netif_tx_wake_all_queues(dev->net);
-			queue_work(system_bh_wq, &dev->bh_work);
+			tasklet_schedule (&dev->bh);
 		}
 	}
 
@@ -2018,12 +2009,10 @@ EXPORT_SYMBOL(usbnet_manage_power);
 void usbnet_link_change(struct usbnet *dev, bool link, bool need_reset)
 {
 	/* update link after link is reseted */
-	if (link && !need_reset) {
-		set_bit(EVENT_LINK_CARRIER_ON, &dev->flags);
-	} else {
-		clear_bit(EVENT_LINK_CARRIER_ON, &dev->flags);
+	if (link && !need_reset)
+		netif_carrier_on(dev->net);
+	else
 		netif_carrier_off(dev->net);
-	}
 
 	if (need_reset && link)
 		usbnet_defer_kevent(dev, EVENT_LINK_RESET);

@@ -592,7 +592,6 @@
 };
 
 &i2c_dvfs {
-	bootph-all;
 	status = "okay";
 
 	clock-frequency = <400000>;
@@ -626,7 +625,6 @@
 		compatible = "rohm,br24t01", "atmel,24c01";
 		reg = <0x50>;
 		pagesize = <8>;
-		bootph-all;
 	};
 };
 

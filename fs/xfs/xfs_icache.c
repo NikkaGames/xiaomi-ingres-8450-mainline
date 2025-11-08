@@ -893,7 +893,10 @@ xfs_metafile_iget(
 	struct xfs_trans	*tp;
 	int			error;
 
-	tp = xfs_trans_alloc_empty(mp);
+	error = xfs_trans_alloc_empty(mp, &tp);
+	if (error)
+		return error;
+
 	error = xfs_trans_metafile_iget(tp, ino, metafile_type, ipp);
 	xfs_trans_cancel(tp);
 	return error;

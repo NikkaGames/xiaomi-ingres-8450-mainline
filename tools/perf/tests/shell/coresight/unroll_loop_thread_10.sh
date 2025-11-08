@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/sh -e
 # CoreSight / Unroll Loop Thread 10 (exclusive)
 
 # SPDX-License-Identifier: GPL-2.0

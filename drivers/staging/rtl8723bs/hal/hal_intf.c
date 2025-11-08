@@ -38,6 +38,10 @@ void rtw_hal_dm_init(struct adapter *padapter)
 	rtl8723b_init_dm_priv(padapter);
 }
 
+void rtw_hal_dm_deinit(struct adapter *padapter)
+{
+}
+
 static void rtw_hal_init_opmode(struct adapter *padapter)
 {
 	enum ndis_802_11_network_infrastructure networkType = Ndis802_11InfrastructureMax;
@@ -72,6 +76,8 @@ uint rtw_hal_init(struct adapter *padapter)
 
 		if (padapter->registrypriv.notch_filter == 1)
 			rtw_hal_notch_filter(padapter, 1);
+
+		rtw_hal_reset_security_engine(padapter);
 
 		rtw_sec_restore_wep_key(dvobj->padapters);
 
@@ -127,7 +133,8 @@ u8 rtw_hal_get_def_var(struct adapter *padapter, enum hal_def_variable eVariable
 
 void rtw_hal_set_odm_var(struct adapter *padapter, enum hal_odm_variable eVariable, void *pValue1, bool bSet)
 {
-	SetHalODMVar(padapter, eVariable, pValue1, bSet);
+	if (padapter->HalFunc.SetHalODMVarHandler)
+		padapter->HalFunc.SetHalODMVarHandler(padapter, eVariable, pValue1, bSet);
 }
 
 void rtw_hal_enable_interrupt(struct adapter *padapter)
@@ -283,12 +290,21 @@ void beacon_timing_control(struct adapter *padapter)
 
 s32 rtw_hal_xmit_thread_handler(struct adapter *padapter)
 {
-	return rtl8723bs_xmit_buf_handler(padapter);
+	if (padapter->HalFunc.xmit_thread_handler)
+		return padapter->HalFunc.xmit_thread_handler(padapter);
+	return _FAIL;
 }
 
 void rtw_hal_notch_filter(struct adapter *adapter, bool enable)
 {
-	hal_notch_filter_8723b(adapter, enable);
+	if (adapter->HalFunc.hal_notch_filter)
+		adapter->HalFunc.hal_notch_filter(adapter, enable);
+}
+
+void rtw_hal_reset_security_engine(struct adapter *adapter)
+{
+	if (adapter->HalFunc.hal_reset_security_engine)
+		adapter->HalFunc.hal_reset_security_engine(adapter);
 }
 
 bool rtw_hal_c2h_valid(struct adapter *adapter, u8 *buf)
@@ -298,12 +314,16 @@ bool rtw_hal_c2h_valid(struct adapter *adapter, u8 *buf)
 
 s32 rtw_hal_c2h_handler(struct adapter *adapter, u8 *c2h_evt)
 {
-	return c2h_handler_8723b(adapter, c2h_evt);
+	s32 ret = _FAIL;
+
+	if (adapter->HalFunc.c2h_handler)
+		ret = adapter->HalFunc.c2h_handler(adapter, c2h_evt);
+	return ret;
 }
 
 c2h_id_filter rtw_hal_c2h_id_filter_ccx(struct adapter *adapter)
 {
-	return c2h_id_filter_ccx_8723b;
+	return adapter->HalFunc.c2h_id_filter_ccx;
 }
 
 s32 rtw_hal_macid_sleep(struct adapter *padapter, u32 macid)
@@ -336,5 +356,10 @@ s32 rtw_hal_macid_wakeup(struct adapter *padapter, u32 macid)
 
 s32 rtw_hal_fill_h2c_cmd(struct adapter *padapter, u8 ElementID, u32 CmdLen, u8 *pCmdBuffer)
 {
-	return FillH2CCmd8723B(padapter, ElementID, CmdLen, pCmdBuffer);
+	s32 ret = _FAIL;
+
+	if (padapter->HalFunc.fill_h2c_cmd)
+		ret = padapter->HalFunc.fill_h2c_cmd(padapter, ElementID, CmdLen, pCmdBuffer);
+
+	return ret;
 }

@@ -27,7 +27,7 @@
  * they share a cacheline (not done yet, though... future optimization).
  */
 
-#ifndef __ASSEMBLER__
+#ifndef __ASSEMBLY__
 /*
  * This struct describes how the registers are laid out on the kernel stack
  * during a syscall or other kernel entry.
@@ -147,7 +147,7 @@ static inline unsigned long regs_get_register(struct pt_regs *regs,
 	return *(unsigned long *)((unsigned long)regs + offset);
 }
 
-#endif /* __ASSEMBLER__ */
+#endif /* __ASSEMBLY__ */
 
 /*
  * Offsets used by 'ptrace' system call interface.

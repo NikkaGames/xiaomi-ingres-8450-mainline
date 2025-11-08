@@ -2,7 +2,6 @@
 #
 config RV_MON_SCHED
 	depends on RV
-	depends on RV_PER_TASK_MONITORS >= 3
 	bool "sched monitor"
 	help
 	  Collection of monitors to check the scheduler behaves according to specifications.

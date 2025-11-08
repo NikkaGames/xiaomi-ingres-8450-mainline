@@ -359,7 +359,6 @@ static void bcm_send_to_user(struct bcm_op *op, struct bcm_msg_head *head,
 	unsigned int datalen = head->nframes * op->cfsiz;
 	int err;
 	unsigned int *pflags;
-	enum skb_drop_reason reason;
 
 	skb = alloc_skb(sizeof(*head) + datalen, gfp_any());
 	if (!skb)
@@ -414,11 +413,11 @@ static void bcm_send_to_user(struct bcm_op *op, struct bcm_msg_head *head,
 	addr->can_family  = AF_CAN;
 	addr->can_ifindex = op->rx_ifindex;
 
-	err = sock_queue_rcv_skb_reason(sk, skb, &reason);
+	err = sock_queue_rcv_skb(sk, skb);
 	if (err < 0) {
 		struct bcm_sock *bo = bcm_sk(sk);
 
-		sk_skb_reason_drop(sk, skb, reason);
+		kfree_skb(skb);
 		/* don't care about overflows in this statistic */
 		bo->dropped_usr_msgs++;
 	}

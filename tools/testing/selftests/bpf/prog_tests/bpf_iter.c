@@ -323,7 +323,7 @@ static void test_task_pidfd(void)
 static void test_task_sleepable(void)
 {
 	struct bpf_iter_tasks *skel;
-	int pid, status, err, data_pipe[2], finish_pipe[2], c = 0;
+	int pid, status, err, data_pipe[2], finish_pipe[2], c;
 	char *test_data = NULL;
 	char *test_data_long = NULL;
 	char *data[2];

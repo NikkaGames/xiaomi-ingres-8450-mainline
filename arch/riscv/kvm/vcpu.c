@@ -18,7 +18,6 @@
 #include <linux/fs.h>
 #include <linux/kvm_host.h>
 #include <asm/cacheflush.h>
-#include <asm/kvm_mmu.h>
 #include <asm/kvm_nacl.h>
 #include <asm/kvm_vcpu_vector.h>
 
@@ -112,7 +111,7 @@ static void kvm_riscv_reset_vcpu(struct kvm_vcpu *vcpu, bool kvm_sbi_reset)
 	vcpu->arch.hfence_tail = 0;
 	memset(vcpu->arch.hfence_queue, 0, sizeof(vcpu->arch.hfence_queue));
 
-	kvm_riscv_vcpu_sbi_reset(vcpu);
+	kvm_riscv_vcpu_sbi_sta_reset(vcpu);
 
 	/* Reset the guest CSRs for hotplug usecase */
 	if (loaded)
@@ -149,9 +148,8 @@ int kvm_arch_vcpu_create(struct kvm_vcpu *vcpu)
 
 	spin_lock_init(&vcpu->arch.reset_state.lock);
 
-	rc = kvm_riscv_vcpu_alloc_vector_context(vcpu);
-	if (rc)
-		return rc;
+	if (kvm_riscv_vcpu_alloc_vector_context(vcpu))
+		return -ENOMEM;
 
 	/* Setup VCPU timer */
 	kvm_riscv_vcpu_timer_init(vcpu);
@@ -160,7 +158,9 @@ int kvm_arch_vcpu_create(struct kvm_vcpu *vcpu)
 	kvm_riscv_vcpu_pmu_init(vcpu);
 
 	/* Setup VCPU AIA */
-	kvm_riscv_vcpu_aia_init(vcpu);
+	rc = kvm_riscv_vcpu_aia_init(vcpu);
+	if (rc)
+		return rc;
 
 	/*
 	 * Setup SBI extensions
@@ -187,8 +187,6 @@ void kvm_arch_vcpu_postcreate(struct kvm_vcpu *vcpu)
 
 void kvm_arch_vcpu_destroy(struct kvm_vcpu *vcpu)
 {
-	kvm_riscv_vcpu_sbi_deinit(vcpu);
-
 	/* Cleanup VCPU AIA context */
 	kvm_riscv_vcpu_aia_deinit(vcpu);
 
@@ -622,7 +620,7 @@ void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 		}
 	}
 
-	kvm_riscv_mmu_update_hgatp(vcpu);
+	kvm_riscv_gstage_update_hgatp(vcpu);
 
 	kvm_riscv_vcpu_timer_restore(vcpu);
 
@@ -682,14 +680,7 @@ void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu)
 	}
 }
 
-/**
- * kvm_riscv_check_vcpu_requests - check and handle pending vCPU requests
- * @vcpu:	the VCPU pointer
- *
- * Return: 1 if we should enter the guest
- *	    0 if we should exit to userspace
- */
-static int kvm_riscv_check_vcpu_requests(struct kvm_vcpu *vcpu)
+static void kvm_riscv_check_vcpu_requests(struct kvm_vcpu *vcpu)
 {
 	struct rcuwait *wait = kvm_arch_vcpu_get_wait(vcpu);
 
@@ -714,13 +705,17 @@ static int kvm_riscv_check_vcpu_requests(struct kvm_vcpu *vcpu)
 			kvm_riscv_reset_vcpu(vcpu, true);
 
 		if (kvm_check_request(KVM_REQ_UPDATE_HGATP, vcpu))
-			kvm_riscv_mmu_update_hgatp(vcpu);
+			kvm_riscv_gstage_update_hgatp(vcpu);
 
 		if (kvm_check_request(KVM_REQ_FENCE_I, vcpu))
 			kvm_riscv_fence_i_process(vcpu);
 
-		if (kvm_check_request(KVM_REQ_TLB_FLUSH, vcpu))
-			kvm_riscv_tlb_flush_process(vcpu);
+		/*
+		 * The generic KVM_REQ_TLB_FLUSH is same as
+		 * KVM_REQ_HFENCE_GVMA_VMID_ALL
+		 */
+		if (kvm_check_request(KVM_REQ_HFENCE_GVMA_VMID_ALL, vcpu))
+			kvm_riscv_hfence_gvma_vmid_all_process(vcpu);
 
 		if (kvm_check_request(KVM_REQ_HFENCE_VVMA_ALL, vcpu))
 			kvm_riscv_hfence_vvma_all_process(vcpu);
@@ -730,12 +725,7 @@ static int kvm_riscv_check_vcpu_requests(struct kvm_vcpu *vcpu)
 
 		if (kvm_check_request(KVM_REQ_STEAL_UPDATE, vcpu))
 			kvm_riscv_vcpu_record_steal_time(vcpu);
-
-		if (kvm_dirty_ring_check_request(vcpu))
-			return 0;
 	}
-
-	return 1;
 }
 
 static void kvm_riscv_update_hvip(struct kvm_vcpu *vcpu)
@@ -917,9 +907,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 
 		kvm_riscv_gstage_vmid_update(vcpu);
 
-		ret = kvm_riscv_check_vcpu_requests(vcpu);
-		if (ret <= 0)
-			continue;
+		kvm_riscv_check_vcpu_requests(vcpu);
 
 		preempt_disable();
 
@@ -963,12 +951,12 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 		}
 
 		/*
-		 * Sanitize VMID mappings cached (TLB) on current CPU
+		 * Cleanup stale TLB enteries
 		 *
 		 * Note: This should be done after G-stage VMID has been
 		 * updated using kvm_riscv_gstage_vmid_ver_changed()
 		 */
-		kvm_riscv_gstage_vmid_sanitize(vcpu);
+		kvm_riscv_local_tlb_sanitize(vcpu);
 
 		trace_kvm_entry(vcpu);
 

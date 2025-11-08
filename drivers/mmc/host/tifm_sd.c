@@ -947,7 +947,7 @@ static int tifm_sd_probe(struct tifm_dev *sock)
 		return rc;
 	}
 
-	mmc = devm_mmc_alloc_host(&sock->dev, sizeof(*host));
+	mmc = mmc_alloc_host(sizeof(struct tifm_sd), &sock->dev);
 	if (!mmc)
 		return -ENOMEM;
 
@@ -982,7 +982,10 @@ static int tifm_sd_probe(struct tifm_dev *sock)
 
 	if (!rc)
 		rc = mmc_add_host(mmc);
+	if (!rc)
+		return 0;
 
+	mmc_free_host(mmc);
 	return rc;
 }
 
@@ -1012,6 +1015,8 @@ static void tifm_sd_remove(struct tifm_dev *sock)
 	spin_unlock_irqrestore(&sock->lock, flags);
 	mmc_remove_host(mmc);
 	dev_dbg(&sock->dev, "after remove\n");
+
+	mmc_free_host(mmc);
 }
 
 #ifdef CONFIG_PM

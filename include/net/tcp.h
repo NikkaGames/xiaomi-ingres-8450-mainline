@@ -267,6 +267,7 @@ extern long sysctl_tcp_mem[3];
 #define TCP_RACK_STATIC_REO_WND  0x2 /* Use static RACK reo wnd */
 #define TCP_RACK_NO_DUPTHRESH    0x4 /* Do not use DUPACK threshold in RACK */
 
+extern atomic_long_t tcp_memory_allocated;
 DECLARE_PER_CPU(int, tcp_memory_per_cpu_fw_alloc);
 
 extern struct percpu_counter tcp_sockets_allocated;
@@ -320,7 +321,7 @@ extern struct proto tcp_prot;
 #define TCP_DEC_STATS(net, field)	SNMP_DEC_STATS((net)->mib.tcp_statistics, field)
 #define TCP_ADD_STATS(net, field, val)	SNMP_ADD_STATS((net)->mib.tcp_statistics, field, val)
 
-void tcp_tsq_work_init(void);
+void tcp_tasklet_init(void);
 
 int tcp_v4_err(struct sk_buff *skb, u32);
 
@@ -1559,7 +1560,7 @@ bool tcp_add_backlog(struct sock *sk, struct sk_buff *skb,
 		     enum skb_drop_reason *reason);
 
 
-int tcp_filter(struct sock *sk, struct sk_buff *skb, enum skb_drop_reason *reason);
+int tcp_filter(struct sock *sk, struct sk_buff *skb);
 void tcp_set_state(struct sock *sk, int state);
 void tcp_done(struct sock *sk);
 int tcp_abort(struct sock *sk, int err);
@@ -1810,8 +1811,14 @@ static inline void tcp_mib_init(struct net *net)
 }
 
 /* from STCP */
+static inline void tcp_clear_retrans_hints_partial(struct tcp_sock *tp)
+{
+	tp->lost_skb_hint = NULL;
+}
+
 static inline void tcp_clear_all_retrans_hints(struct tcp_sock *tp)
 {
+	tcp_clear_retrans_hints_partial(tp);
 	tp->retransmit_skb_hint = NULL;
 }
 
@@ -2655,8 +2662,8 @@ void tcp_update_ulp(struct sock *sk, struct proto *p,
 		    void (*write_space)(struct sock *sk));
 
 #define MODULE_ALIAS_TCP_ULP(name)				\
-	MODULE_INFO(alias, name);		\
-	MODULE_INFO(alias, "tcp-ulp-" name)
+	__MODULE_INFO(alias, alias_userspace, name);		\
+	__MODULE_INFO(alias, alias_tcp_ulp, "tcp-ulp-" name)
 
 #ifdef CONFIG_NET_SOCK_MSG
 struct sk_msg;

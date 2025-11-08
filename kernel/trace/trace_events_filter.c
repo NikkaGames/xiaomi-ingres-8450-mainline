@@ -1344,14 +1344,13 @@ struct filter_list {
 
 struct filter_head {
 	struct list_head	list;
-	union {
-		struct rcu_head		rcu;
-		struct rcu_work		rwork;
-	};
+	struct rcu_head		rcu;
 };
 
-static void free_filter_list(struct filter_head *filter_list)
+
+static void free_filter_list(struct rcu_head *rhp)
 {
+	struct filter_head *filter_list = container_of(rhp, struct filter_head, rcu);
 	struct filter_list *filter_item, *tmp;
 
 	list_for_each_entry_safe(filter_item, tmp, &filter_list->list, list) {
@@ -1362,20 +1361,9 @@ static void free_filter_list(struct filter_head *filter_list)
 	kfree(filter_list);
 }
 
-static void free_filter_list_work(struct work_struct *work)
-{
-	struct filter_head *filter_list;
-
-	filter_list = container_of(to_rcu_work(work), struct filter_head, rwork);
-	free_filter_list(filter_list);
-}
-
 static void free_filter_list_tasks(struct rcu_head *rhp)
 {
-	struct filter_head *filter_list = container_of(rhp, struct filter_head, rcu);
-
-	INIT_RCU_WORK(&filter_list->rwork, free_filter_list_work);
-	queue_rcu_work(system_wq, &filter_list->rwork);
+	call_rcu(rhp, free_filter_list);
 }
 
 /*
@@ -1472,7 +1460,7 @@ static void filter_free_subsystem_filters(struct trace_subsystem_dir *dir,
 	tracepoint_synchronize_unregister();
 
 	if (head)
-		free_filter_list(head);
+		free_filter_list(&head->rcu);
 
 	list_for_each_entry(file, &tr->events, list) {
 		if (file->system != dir || !file->filter)
@@ -2317,7 +2305,7 @@ static int process_system_preds(struct trace_subsystem_dir *dir,
 	return 0;
  fail:
 	/* No call succeeded */
-	free_filter_list(filter_list);
+	free_filter_list(&filter_list->rcu);
 	parse_error(pe, FILT_ERR_BAD_SUBSYS_FILTER, 0);
 	return -EINVAL;
  fail_mem:
@@ -2327,7 +2315,7 @@ static int process_system_preds(struct trace_subsystem_dir *dir,
 	if (!fail)
 		delay_free_filter(filter_list);
 	else
-		free_filter_list(filter_list);
+		free_filter_list(&filter_list->rcu);
 
 	return -ENOMEM;
 }
@@ -2911,10 +2899,6 @@ static __init int ftrace_test_event_filter(void)
 
 	if (i == DATA_CNT)
 		printk(KERN_CONT "OK\n");
-
-	/* Need to call ftrace_test_filter to prevent a warning */
-	if (!trace_ftrace_test_filter_enabled())
-		trace_ftrace_test_filter(1, 2, 3, 4, 5, 6, 7, 8);
 
 	return 0;
 }

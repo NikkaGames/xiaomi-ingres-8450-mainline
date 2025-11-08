@@ -112,46 +112,47 @@ static void rpc_clnt_remove_pipedir(struct rpc_clnt *clnt)
 	}
 }
 
-static int rpc_setup_pipedir_sb(struct super_block *sb,
+static struct dentry *rpc_setup_pipedir_sb(struct super_block *sb,
 				    struct rpc_clnt *clnt)
 {
 	static uint32_t clntid;
 	const char *dir_name = clnt->cl_program->pipe_dir_name;
 	char name[15];
-	struct dentry *dir;
-	int err;
+	struct dentry *dir, *dentry;
 
 	dir = rpc_d_lookup_sb(sb, dir_name);
 	if (dir == NULL) {
 		pr_info("RPC: pipefs directory doesn't exist: %s\n", dir_name);
-		return -ENOENT;
+		return dir;
 	}
 	for (;;) {
 		snprintf(name, sizeof(name), "clnt%x", (unsigned int)clntid++);
 		name[sizeof(name) - 1] = '\0';
-		err = rpc_create_client_dir(dir, name, clnt);
-		if (!err)
+		dentry = rpc_create_client_dir(dir, name, clnt);
+		if (!IS_ERR(dentry))
 			break;
-		if (err == -EEXIST)
+		if (dentry == ERR_PTR(-EEXIST))
 			continue;
 		printk(KERN_INFO "RPC: Couldn't create pipefs entry"
-				" %s/%s, error %d\n",
-				dir_name, name, err);
+				" %s/%s, error %ld\n",
+				dir_name, name, PTR_ERR(dentry));
 		break;
 	}
 	dput(dir);
-	return err;
+	return dentry;
 }
 
 static int
 rpc_setup_pipedir(struct super_block *pipefs_sb, struct rpc_clnt *clnt)
 {
+	struct dentry *dentry;
+
 	clnt->pipefs_sb = pipefs_sb;
 
 	if (clnt->cl_program->pipe_dir_name != NULL) {
-		int err = rpc_setup_pipedir_sb(pipefs_sb, clnt);
-		if (err && err != -ENOENT)
-			return err;
+		dentry = rpc_setup_pipedir_sb(pipefs_sb, clnt);
+		if (IS_ERR(dentry))
+			return PTR_ERR(dentry);
 	}
 	return 0;
 }
@@ -179,9 +180,16 @@ static int rpc_clnt_skip_event(struct rpc_clnt *clnt, unsigned long event)
 static int __rpc_clnt_handle_event(struct rpc_clnt *clnt, unsigned long event,
 				   struct super_block *sb)
 {
+	struct dentry *dentry;
+
 	switch (event) {
 	case RPC_PIPEFS_MOUNT:
-		return rpc_setup_pipedir_sb(sb, clnt);
+		dentry = rpc_setup_pipedir_sb(sb, clnt);
+		if (!dentry)
+			return -ENOENT;
+		if (IS_ERR(dentry))
+			return PTR_ERR(dentry);
+		break;
 	case RPC_PIPEFS_UMOUNT:
 		__rpc_clnt_remove_pipedir(clnt);
 		break;

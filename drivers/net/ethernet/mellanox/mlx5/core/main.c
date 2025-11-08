@@ -1102,7 +1102,9 @@ static int mlx5_init_once(struct mlx5_core_dev *dev)
 	}
 
 	dev->dm = mlx5_dm_create(dev);
-	dev->st = mlx5_st_create(dev);
+	if (IS_ERR(dev->dm))
+		mlx5_core_warn(dev, "Failed to init device memory %ld\n", PTR_ERR(dev->dm));
+
 	dev->tracer = mlx5_fw_tracer_create(dev);
 	dev->hv_vhca = mlx5_hv_vhca_create(dev);
 	dev->rsc_dump = mlx5_rsc_dump_create(dev);
@@ -1151,7 +1153,6 @@ static void mlx5_cleanup_once(struct mlx5_core_dev *dev)
 	mlx5_rsc_dump_destroy(dev);
 	mlx5_hv_vhca_destroy(dev->hv_vhca);
 	mlx5_fw_tracer_destroy(dev->tracer);
-	mlx5_st_destroy(dev);
 	mlx5_dm_cleanup(dev);
 	mlx5_fs_core_free(dev);
 	mlx5_sf_table_cleanup(dev);

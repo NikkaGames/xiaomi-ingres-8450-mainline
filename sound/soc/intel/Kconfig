@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0-only
-menu "Intel"
-
 config SND_SOC_INTEL_SST_TOPLEVEL
 	bool "Intel ASoC SST drivers"
 	default y
@@ -117,5 +115,3 @@ source "sound/soc/intel/avs/boards/Kconfig"
 
 # ASoC codec drivers
 source "sound/soc/intel/boards/Kconfig"
-
-endmenu

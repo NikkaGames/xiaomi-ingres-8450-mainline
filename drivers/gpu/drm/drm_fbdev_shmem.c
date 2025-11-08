@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 
-#include <linux/export.h>
 #include <linux/fb.h>
 
 #include <drm/drm_drv.h>

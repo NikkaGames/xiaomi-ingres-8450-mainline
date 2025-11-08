@@ -605,7 +605,7 @@ snd_ad1889_pcm_init(struct snd_ad1889 *chip, int device)
 
 	pcm->private_data = chip;
 	pcm->info_flags = 0;
-	strscpy(pcm->name, chip->card->shortname);
+	strcpy(pcm->name, chip->card->shortname);
 	
 	chip->pcm = pcm;
 	chip->psubs = NULL;
@@ -866,8 +866,8 @@ __snd_ad1889_probe(struct pci_dev *pci,
 		return err;
 	chip = card->private_data;
 
-	strscpy(card->driver, "AD1889");
-	strscpy(card->shortname, "Analog Devices AD1889");
+	strcpy(card->driver, "AD1889");
+	strcpy(card->shortname, "Analog Devices AD1889");
 
 	/* (3) */
 	err = snd_ad1889_create(card, pci);

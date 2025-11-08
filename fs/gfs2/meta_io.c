@@ -103,7 +103,6 @@ const struct address_space_operations gfs2_meta_aops = {
 	.invalidate_folio = block_invalidate_folio,
 	.writepages = gfs2_aspace_writepages,
 	.release_folio = gfs2_release_folio,
-	.migrate_folio = buffer_migrate_folio_norefs,
 };
 
 const struct address_space_operations gfs2_rgrp_aops = {
@@ -111,7 +110,6 @@ const struct address_space_operations gfs2_rgrp_aops = {
 	.invalidate_folio = block_invalidate_folio,
 	.writepages = gfs2_aspace_writepages,
 	.release_folio = gfs2_release_folio,
-	.migrate_folio = buffer_migrate_folio_norefs,
 };
 
 /**
@@ -230,7 +228,7 @@ static void gfs2_submit_bhs(blk_opf_t opf, struct buffer_head *bhs[], int num)
 		struct bio *bio;
 
 		bio = bio_alloc(bh->b_bdev, num, opf, GFP_NOIO);
-		bio->bi_iter.bi_sector = bh->b_blocknr * (bh->b_size >> SECTOR_SHIFT);
+		bio->bi_iter.bi_sector = bh->b_blocknr * (bh->b_size >> 9);
 		while (num > 0) {
 			bh = *bhs;
 			if (!bio_add_folio(bio, bh->b_folio, bh->b_size, bh_offset(bh))) {
@@ -445,9 +443,11 @@ void gfs2_journal_wipe(struct gfs2_inode *ip, u64 bstart, u32 blen)
 	struct buffer_head *bh;
 	int ty;
 
-	/* This can only happen during incomplete inode creation. */
-	if (!ip->i_gl)
+	if (!ip->i_gl) {
+		/* This can only happen during incomplete inode creation. */
+		BUG_ON(!test_bit(GIF_ALLOC_FAILED, &ip->i_flags));
 		return;
+	}
 
 	gfs2_ail1_wipe(sdp, bstart, blen);
 	while (blen) {

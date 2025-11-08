@@ -215,7 +215,9 @@ static int gpio_virtuser_set_array_value(struct gpio_descs *descs,
 	struct gpio_virtuser_irq_work_context ctx;
 
 	if (!atomic)
-		return gpiod_multi_set_value_cansleep(descs, values);
+		return gpiod_set_array_value_cansleep(descs->ndescs,
+						      descs->desc,
+						      descs->info, values);
 
 	gpio_virtuser_init_irq_work_context(&ctx);
 	ctx.work = IRQ_WORK_INIT_HARD(gpio_virtuser_set_value_array_atomic);

@@ -220,6 +220,7 @@ nsim_dev_hwstats_enable_ifindex(struct nsim_dev_hwstats *hwstats,
 	struct nsim_dev_hwstats_netdev *hwsdev;
 	struct nsim_dev *nsim_dev;
 	struct net_device *netdev;
+	bool notify = false;
 	struct net *net;
 	int err = 0;
 
@@ -250,9 +251,11 @@ nsim_dev_hwstats_enable_ifindex(struct nsim_dev_hwstats *hwstats,
 
 	if (netdev_offload_xstats_enabled(netdev, type)) {
 		nsim_dev_hwsdev_enable(hwsdev, NULL);
-		rtnl_offload_xstats_notify(netdev);
+		notify = true;
 	}
 
+	if (notify)
+		rtnl_offload_xstats_notify(netdev);
 	rtnl_unlock();
 	return err;
 

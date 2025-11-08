@@ -20,7 +20,6 @@
  * OF THIS SOFTWARE.
  */
 
-#include <linux/export.h>
 #include <linux/uaccess.h>
 
 #include <drm/drm_drv.h>

@@ -124,8 +124,6 @@
 };
 
 &dsi {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	status = "okay";
 
 	ports {
@@ -485,7 +483,8 @@
 
 	ports {
 		port@0 {
-			mipi_in_ucam: endpoint {
+			mipi_in_ucam: endpoint@0 {
+				reg = <0>;
 				data-lanes = <1 2>;
 				remote-endpoint = <&ucam_out>;
 			};

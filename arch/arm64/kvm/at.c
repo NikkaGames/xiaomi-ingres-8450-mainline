@@ -1047,51 +1047,34 @@ static void compute_s1_overlay_permissions(struct kvm_vcpu *vcpu,
 
 	idx = FIELD_GET(PTE_PO_IDX_MASK, wr->desc);
 
-	if (wr->pov) {
-		switch (wi->regime) {
-		case TR_EL10:
-			pov_perms = perm_idx(vcpu, POR_EL1, idx);
-			break;
-		case TR_EL20:
-			pov_perms = perm_idx(vcpu, POR_EL2, idx);
-			break;
-		case TR_EL2:
-			pov_perms = perm_idx(vcpu, POR_EL2, idx);
-			break;
-		}
+	switch (wi->regime) {
+	case TR_EL10:
+		pov_perms = perm_idx(vcpu, POR_EL1, idx);
+		uov_perms = perm_idx(vcpu, POR_EL0, idx);
+		break;
+	case TR_EL20:
+		pov_perms = perm_idx(vcpu, POR_EL2, idx);
+		uov_perms = perm_idx(vcpu, POR_EL0, idx);
+		break;
+	case TR_EL2:
+		pov_perms = perm_idx(vcpu, POR_EL2, idx);
+		uov_perms = 0;
+		break;
+	}
 
-		if (pov_perms & ~POE_RWX)
-			pov_perms = POE_NONE;
+	if (pov_perms & ~POE_RWX)
+		pov_perms = POE_NONE;
 
-		/* R_QXXPC, S1PrivOverflow enabled */
-		if (wr->pwxn && (pov_perms & POE_X))
-			pov_perms &= ~POE_W;
-
+	if (wi->poe && wr->pov) {
 		wr->pr &= pov_perms & POE_R;
 		wr->pw &= pov_perms & POE_W;
 		wr->px &= pov_perms & POE_X;
 	}
 
-	if (wr->uov) {
-		switch (wi->regime) {
-		case TR_EL10:
-			uov_perms = perm_idx(vcpu, POR_EL0, idx);
-			break;
-		case TR_EL20:
-			uov_perms = perm_idx(vcpu, POR_EL0, idx);
-			break;
-		case TR_EL2:
-			uov_perms = 0;
-			break;
-		}
+	if (uov_perms & ~POE_RWX)
+		uov_perms = POE_NONE;
 
-		if (uov_perms & ~POE_RWX)
-			uov_perms = POE_NONE;
-
-		/* R_NPBXC, S1UnprivOverlay enabled */
-		if (wr->uwxn && (uov_perms & POE_X))
-			uov_perms &= ~POE_W;
-
+	if (wi->e0poe && wr->uov) {
 		wr->ur &= uov_perms & POE_R;
 		wr->uw &= uov_perms & POE_W;
 		wr->ux &= uov_perms & POE_X;
@@ -1112,15 +1095,24 @@ static void compute_s1_permissions(struct kvm_vcpu *vcpu,
 	if (!wi->hpd)
 		compute_s1_hierarchical_permissions(vcpu, wi, wr);
 
-	compute_s1_overlay_permissions(vcpu, wi, wr);
+	if (wi->poe || wi->e0poe)
+		compute_s1_overlay_permissions(vcpu, wi, wr);
 
-	/* R_QXXPC, S1PrivOverlay disabled */
-	if (!wr->pov)
-		wr->px &= !(wr->pwxn && wr->pw);
+	/* R_QXXPC */
+	if (wr->pwxn) {
+		if (!wr->pov && wr->pw)
+			wr->px = false;
+		if (wr->pov && wr->px)
+			wr->pw = false;
+	}
 
-	/* R_NPBXC, S1UnprivOverlay disabled */
-	if (!wr->uov)
-		wr->ux &= !(wr->uwxn && wr->uw);
+	/* R_NPBXC */
+	if (wr->uwxn) {
+		if (!wr->uov && wr->uw)
+			wr->ux = false;
+		if (wr->uov && wr->ux)
+			wr->uw = false;
+	}
 
 	pan = wi->pan && (wr->ur || wr->uw ||
 			  (pan3_enabled(vcpu, wi->regime) && wr->ux));
@@ -1420,10 +1412,10 @@ void __kvm_at_s12(struct kvm_vcpu *vcpu, u32 op, u64 vaddr)
 		return;
 
 	/*
-	 * If we only have a single stage of translation (EL2&0), exit
-	 * early. Same thing if {VM,DC}=={0,0}.
+	 * If we only have a single stage of translation (E2H=0 or
+	 * TGE=1), exit early. Same thing if {VM,DC}=={0,0}.
 	 */
-	if (compute_translation_regime(vcpu, op) == TR_EL20 ||
+	if (!vcpu_el2_e2h_is_set(vcpu) || vcpu_el2_tge_is_set(vcpu) ||
 	    !(vcpu_read_sys_reg(vcpu, HCR_EL2) & (HCR_VM | HCR_DC)))
 		return;
 

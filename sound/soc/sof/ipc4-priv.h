@@ -72,8 +72,6 @@ struct sof_ipc4_fw_library {
  * @max_num_pipelines: max number of pipelines
  * @max_libs_count: Maximum number of libraries support by the FW including the
  *		    base firmware
- * @fw_context_save: Firmware supports full context save and restore
- * @libraries_restored: The libraries have been retained during firmware boot
  *
  * @load_library: Callback function for platform dependent library loading
  * @pipeline_state_mutex: Mutex to protect pipeline triggers, ref counts, states and deletion
@@ -89,7 +87,6 @@ struct sof_ipc4_fw_data {
 	int max_num_pipelines;
 	u32 max_libs_count;
 	bool fw_context_save;
-	bool libraries_restored;
 
 	int (*load_library)(struct snd_sof_dev *sdev,
 			    struct sof_ipc4_fw_library *fw_lib, bool reload);
@@ -125,8 +122,5 @@ size_t sof_ipc4_find_debug_slot_offset_by_type(struct snd_sof_dev *sdev,
 					       u32 slot_type);
 
 void sof_ipc4_mic_privacy_state_change(struct snd_sof_dev *sdev, bool state);
-
-enum sof_ipc4_pipeline_state;
-const char *sof_ipc4_pipeline_state_str(enum sof_ipc4_pipeline_state state);
 
 #endif

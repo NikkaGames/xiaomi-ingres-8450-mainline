@@ -368,14 +368,6 @@ static void mshv_irqfd_queue_proc(struct file *file, wait_queue_head_t *wqh,
 			container_of(polltbl, struct mshv_irqfd, irqfd_polltbl);
 
 	irqfd->irqfd_wqh = wqh;
-
-	/*
-	 * TODO: Ensure there isn't already an exclusive, priority waiter, e.g.
-	 * that the irqfd isn't already bound to another partition.  Only the
-	 * first exclusive waiter encountered will be notified, and
-	 * add_wait_queue_priority() doesn't enforce exclusivity.
-	 */
-	irqfd->irqfd_wait.flags |= WQ_FLAG_EXCLUSIVE;
 	add_wait_queue_priority(wqh, &irqfd->irqfd_wait);
 }
 
@@ -385,10 +377,9 @@ static int mshv_irqfd_assign(struct mshv_partition *pt,
 	struct eventfd_ctx *eventfd = NULL, *resamplefd = NULL;
 	struct mshv_irqfd *irqfd, *tmp;
 	unsigned int events;
+	struct fd f;
 	int ret;
 	int idx;
-
-	CLASS(fd, f)(args->fd);
 
 	irqfd = kzalloc(sizeof(*irqfd), GFP_KERNEL);
 	if (!irqfd)
@@ -399,7 +390,8 @@ static int mshv_irqfd_assign(struct mshv_partition *pt,
 	INIT_WORK(&irqfd->irqfd_shutdown, mshv_irqfd_shutdown);
 	seqcount_spinlock_init(&irqfd->irqfd_irqe_sc, &pt->pt_irqfds_lock);
 
-	if (fd_empty(f)) {
+	f = fdget(args->fd);
+	if (!fd_file(f)) {
 		ret = -EBADF;
 		goto out;
 	}
@@ -504,6 +496,12 @@ static int mshv_irqfd_assign(struct mshv_partition *pt,
 		mshv_assert_irq_slow(irqfd);
 
 	srcu_read_unlock(&pt->pt_irq_srcu, idx);
+	/*
+	 * do not drop the file until the irqfd is fully initialized, otherwise
+	 * we might race against the POLLHUP
+	 */
+	fdput(f);
+
 	return 0;
 
 fail:
@@ -515,6 +513,8 @@ fail:
 
 	if (eventfd && !IS_ERR(eventfd))
 		eventfd_ctx_put(eventfd);
+
+	fdput(f);
 
 out:
 	kfree(irqfd);

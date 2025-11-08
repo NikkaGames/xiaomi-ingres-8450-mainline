@@ -216,8 +216,8 @@ found:
 		 t->mdiv, t->kdiv);
 }
 
-static int clk_pll1416x_determine_rate(struct clk_hw *hw,
-				       struct clk_rate_request *req)
+static long clk_pll1416x_round_rate(struct clk_hw *hw, unsigned long rate,
+			unsigned long *prate)
 {
 	struct clk_pll14xx *pll = to_clk_pll14xx(hw);
 	const struct imx_pll14xx_rate_table *rate_table = pll->rate_table;
@@ -225,29 +225,22 @@ static int clk_pll1416x_determine_rate(struct clk_hw *hw,
 
 	/* Assuming rate_table is in descending order */
 	for (i = 0; i < pll->rate_count; i++)
-		if (req->rate >= rate_table[i].rate) {
-			req->rate = rate_table[i].rate;
-
-			return 0;
-		}
+		if (rate >= rate_table[i].rate)
+			return rate_table[i].rate;
 
 	/* return minimum supported value */
-	req->rate = rate_table[pll->rate_count - 1].rate;
-
-	return 0;
+	return rate_table[pll->rate_count - 1].rate;
 }
 
-static int clk_pll1443x_determine_rate(struct clk_hw *hw,
-				       struct clk_rate_request *req)
+static long clk_pll1443x_round_rate(struct clk_hw *hw, unsigned long rate,
+			unsigned long *prate)
 {
 	struct clk_pll14xx *pll = to_clk_pll14xx(hw);
 	struct imx_pll14xx_rate_table t;
 
-	imx_pll14xx_calc_settings(pll, req->rate, req->best_parent_rate, &t);
+	imx_pll14xx_calc_settings(pll, rate, *prate, &t);
 
-	req->rate = t.rate;
-
-	return 0;
+	return t.rate;
 }
 
 static unsigned long clk_pll14xx_recalc_rate(struct clk_hw *hw,
@@ -477,7 +470,7 @@ static const struct clk_ops clk_pll1416x_ops = {
 	.unprepare	= clk_pll14xx_unprepare,
 	.is_prepared	= clk_pll14xx_is_prepared,
 	.recalc_rate	= clk_pll14xx_recalc_rate,
-	.determine_rate = clk_pll1416x_determine_rate,
+	.round_rate	= clk_pll1416x_round_rate,
 	.set_rate	= clk_pll1416x_set_rate,
 };
 
@@ -490,7 +483,7 @@ static const struct clk_ops clk_pll1443x_ops = {
 	.unprepare	= clk_pll14xx_unprepare,
 	.is_prepared	= clk_pll14xx_is_prepared,
 	.recalc_rate	= clk_pll14xx_recalc_rate,
-	.determine_rate = clk_pll1443x_determine_rate,
+	.round_rate	= clk_pll1443x_round_rate,
 	.set_rate	= clk_pll1443x_set_rate,
 };
 

@@ -948,6 +948,7 @@ err_free:
 	if (c->slot && c->slot->free_slot)
 		c->slot->free_slot(pdev);
 
+	sdhci_free_host(c->host);
 	return err;
 }
 
@@ -971,6 +972,8 @@ static void sdhci_acpi_remove(struct platform_device *pdev)
 
 	if (c->slot && c->slot->free_slot)
 		c->slot->free_slot(pdev);
+
+	sdhci_free_host(c->host);
 }
 
 static void __maybe_unused sdhci_acpi_reset_signal_voltage_if_needed(
@@ -1025,11 +1028,14 @@ static int sdhci_acpi_runtime_suspend(struct device *dev)
 {
 	struct sdhci_acpi_host *c = dev_get_drvdata(dev);
 	struct sdhci_host *host = c->host;
+	int ret;
 
 	if (host->tuning_mode != SDHCI_TUNING_MODE_3)
 		mmc_retune_needed(host->mmc);
 
-	sdhci_runtime_suspend_host(host);
+	ret = sdhci_runtime_suspend_host(host);
+	if (ret)
+		return ret;
 
 	sdhci_acpi_reset_signal_voltage_if_needed(dev);
 	return 0;
@@ -1041,8 +1047,7 @@ static int sdhci_acpi_runtime_resume(struct device *dev)
 
 	sdhci_acpi_byt_setting(&c->pdev->dev);
 
-	sdhci_runtime_resume_host(c->host, 0);
-	return 0;
+	return sdhci_runtime_resume_host(c->host, 0);
 }
 
 #endif

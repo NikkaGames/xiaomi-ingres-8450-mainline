@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 // Test for blocking read.
-
 --tolerance_usecs=10000
---mss=1000
 
 `./defaults.sh`
 

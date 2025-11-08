@@ -57,10 +57,6 @@ long ntfs_ioctl(struct file *filp, u32 cmd, unsigned long arg)
 	struct inode *inode = file_inode(filp);
 	struct ntfs_sb_info *sbi = inode->i_sb->s_fs_info;
 
-	/* Avoid any operation if inode is bad. */
-	if (unlikely(is_bad_ni(ntfs_i(inode))))
-		return -EINVAL;
-
 	switch (cmd) {
 	case FITRIM:
 		return ntfs_ioctl_fitrim(sbi, arg);
@@ -84,10 +80,6 @@ int ntfs_getattr(struct mnt_idmap *idmap, const struct path *path,
 {
 	struct inode *inode = d_inode(path->dentry);
 	struct ntfs_inode *ni = ntfs_i(inode);
-
-	/* Avoid any operation if inode is bad. */
-	if (unlikely(is_bad_ni(ni)))
-		return -EINVAL;
 
 	stat->result_mask |= STATX_BTIME;
 	stat->btime = ni->i_crtime;
@@ -162,13 +154,13 @@ static int ntfs_extend_initialized_size(struct file *file,
 		if (pos + len > new_valid)
 			len = new_valid - pos;
 
-		err = ntfs_write_begin(NULL, mapping, pos, len, &folio, NULL);
+		err = ntfs_write_begin(file, mapping, pos, len, &folio, NULL);
 		if (err)
 			goto out;
 
 		folio_zero_range(folio, zerofrom, folio_size(folio) - zerofrom);
 
-		err = ntfs_write_end(NULL, mapping, pos, len, len, folio, NULL);
+		err = ntfs_write_end(file, mapping, pos, len, len, folio, NULL);
 		if (err < 0)
 			goto out;
 		pos += len;
@@ -269,20 +261,15 @@ out:
 }
 
 /*
- * ntfs_file_mmap_prepare - file_operations::mmap_prepare
+ * ntfs_file_mmap - file_operations::mmap
  */
-static int ntfs_file_mmap_prepare(struct vm_area_desc *desc)
+static int ntfs_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
-	struct file *file = desc->file;
 	struct inode *inode = file_inode(file);
 	struct ntfs_inode *ni = ntfs_i(inode);
-	u64 from = ((u64)desc->pgoff << PAGE_SHIFT);
-	bool rw = desc->vm_flags & VM_WRITE;
+	u64 from = ((u64)vma->vm_pgoff << PAGE_SHIFT);
+	bool rw = vma->vm_flags & VM_WRITE;
 	int err;
-
-	/* Avoid any operation if inode is bad. */
-	if (unlikely(is_bad_ni(ni)))
-		return -EINVAL;
 
 	if (unlikely(ntfs3_forced_shutdown(inode->i_sb)))
 		return -EIO;
@@ -304,7 +291,7 @@ static int ntfs_file_mmap_prepare(struct vm_area_desc *desc)
 
 	if (rw) {
 		u64 to = min_t(loff_t, i_size_read(inode),
-			       from + desc->end - desc->start);
+			       from + vma->vm_end - vma->vm_start);
 
 		if (is_sparsed(ni)) {
 			/* Allocate clusters for rw map. */
@@ -323,10 +310,7 @@ static int ntfs_file_mmap_prepare(struct vm_area_desc *desc)
 		}
 
 		if (ni->i_valid < to) {
-			if (!inode_trylock(inode)) {
-				err = -EAGAIN;
-				goto out;
-			}
+			inode_lock(inode);
 			err = ntfs_extend_initialized_size(file, ni,
 							   ni->i_valid, to);
 			inode_unlock(inode);
@@ -335,7 +319,7 @@ static int ntfs_file_mmap_prepare(struct vm_area_desc *desc)
 		}
 	}
 
-	err = generic_file_mmap_prepare(desc);
+	err = generic_file_mmap(file, vma);
 out:
 	return err;
 }
@@ -751,10 +735,6 @@ int ntfs_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
 	umode_t mode = inode->i_mode;
 	int err;
 
-	/* Avoid any operation if inode is bad. */
-	if (unlikely(is_bad_ni(ni)))
-		return -EINVAL;
-
 	if (unlikely(ntfs3_forced_shutdown(inode->i_sb)))
 		return -EIO;
 
@@ -814,10 +794,6 @@ out:
 static int check_read_restriction(struct inode *inode)
 {
 	struct ntfs_inode *ni = ntfs_i(inode);
-
-	/* Avoid any operation if inode is bad. */
-	if (unlikely(is_bad_ni(ni)))
-		return -EINVAL;
 
 	if (unlikely(ntfs3_forced_shutdown(inode->i_sb)))
 		return -EIO;
@@ -1154,10 +1130,6 @@ static int check_write_restriction(struct inode *inode)
 {
 	struct ntfs_inode *ni = ntfs_i(inode);
 
-	/* Avoid any operation if inode is bad. */
-	if (unlikely(is_bad_ni(ni)))
-		return -EINVAL;
-
 	if (unlikely(ntfs3_forced_shutdown(inode->i_sb)))
 		return -EIO;
 
@@ -1240,10 +1212,6 @@ int ntfs_file_open(struct inode *inode, struct file *file)
 {
 	struct ntfs_inode *ni = ntfs_i(inode);
 
-	/* Avoid any operation if inode is bad. */
-	if (unlikely(is_bad_ni(ni)))
-		return -EINVAL;
-
 	if (unlikely(ntfs3_forced_shutdown(inode->i_sb)))
 		return -EIO;
 
@@ -1313,10 +1281,6 @@ int ntfs_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 	int err;
 	struct ntfs_inode *ni = ntfs_i(inode);
 
-	/* Avoid any operation if inode is bad. */
-	if (unlikely(is_bad_ni(ni)))
-		return -EINVAL;
-
 	err = fiemap_prep(inode, fieinfo, start, &len, ~FIEMAP_FLAG_XATTR);
 	if (err)
 		return err;
@@ -1367,7 +1331,7 @@ const struct file_operations ntfs_file_operations = {
 #endif
 	.splice_read	= ntfs_file_splice_read,
 	.splice_write	= ntfs_file_splice_write,
-	.mmap_prepare	= ntfs_file_mmap_prepare,
+	.mmap		= ntfs_file_mmap,
 	.open		= ntfs_file_open,
 	.fsync		= generic_file_fsync,
 	.fallocate	= ntfs_fallocate,

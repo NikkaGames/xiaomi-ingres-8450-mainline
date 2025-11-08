@@ -16,14 +16,9 @@ allOf:
 
 properties:
   compatible:
-    oneOf:
-      - enum:
-          - amlogic,a4-rtc
-          - amlogic,a5-rtc
-      - items:
-          - enum:
-              - amlogic,c3-rtc
-          - const: amlogic,a5-rtc
+    enum:
+      - amlogic,a4-rtc
+      - amlogic,a5-rtc
 
   reg:
     maxItems: 1

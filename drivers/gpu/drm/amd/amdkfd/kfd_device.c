@@ -971,7 +971,7 @@ int kgd2kfd_pre_reset(struct kfd_dev *kfd,
 		kfd_smi_event_update_gpu_reset(node, false, reset_context);
 	}
 
-	kgd2kfd_suspend(kfd, true);
+	kgd2kfd_suspend(kfd, false);
 
 	for (i = 0; i < kfd->num_nodes; i++)
 		kfd_signal_reset_event(kfd->nodes[i]);
@@ -1013,33 +1013,13 @@ int kgd2kfd_post_reset(struct kfd_dev *kfd)
 	return 0;
 }
 
-bool kfd_is_locked(struct kfd_dev *kfd)
+bool kfd_is_locked(void)
 {
-	uint8_t id  = 0;
-	struct kfd_node *dev;
-
 	lockdep_assert_held(&kfd_processes_mutex);
-
-	/* check reset/suspend lock */
-	if (kfd_locked > 0)
-		return true;
-
-	if (kfd)
-		return kfd->kfd_dev_lock > 0;
-
-	/* check lock on all cgroup accessible devices */
-	while (kfd_topology_enum_kfd_devices(id++, &dev) == 0) {
-		if (!dev || kfd_devcgroup_check_permission(dev))
-			continue;
-
-		if (dev->kfd->kfd_dev_lock > 0)
-			return true;
-	}
-
-	return false;
+	return  (kfd_locked > 0);
 }
 
-void kgd2kfd_suspend(struct kfd_dev *kfd, bool suspend_proc)
+void kgd2kfd_suspend(struct kfd_dev *kfd, bool run_pm)
 {
 	struct kfd_node *node;
 	int i;
@@ -1047,8 +1027,14 @@ void kgd2kfd_suspend(struct kfd_dev *kfd, bool suspend_proc)
 	if (!kfd->init_complete)
 		return;
 
-	if (suspend_proc)
-		kgd2kfd_suspend_process(kfd);
+	/* for runtime suspend, skip locking kfd */
+	if (!run_pm) {
+		mutex_lock(&kfd_processes_mutex);
+		/* For first KFD device suspend all the KFD processes */
+		if (++kfd_locked == 1)
+			kfd_suspend_all_processes();
+		mutex_unlock(&kfd_processes_mutex);
+	}
 
 	for (i = 0; i < kfd->num_nodes; i++) {
 		node = kfd->nodes[i];
@@ -1056,7 +1042,7 @@ void kgd2kfd_suspend(struct kfd_dev *kfd, bool suspend_proc)
 	}
 }
 
-int kgd2kfd_resume(struct kfd_dev *kfd, bool resume_proc)
+int kgd2kfd_resume(struct kfd_dev *kfd, bool run_pm)
 {
 	int ret, i;
 
@@ -1069,36 +1055,14 @@ int kgd2kfd_resume(struct kfd_dev *kfd, bool resume_proc)
 			return ret;
 	}
 
-	if (resume_proc)
-		ret = kgd2kfd_resume_process(kfd);
-
-	return ret;
-}
-
-void kgd2kfd_suspend_process(struct kfd_dev *kfd)
-{
-	if (!kfd->init_complete)
-		return;
-
-	mutex_lock(&kfd_processes_mutex);
-	/* For first KFD device suspend all the KFD processes */
-	if (++kfd_locked == 1)
-		kfd_suspend_all_processes();
-	mutex_unlock(&kfd_processes_mutex);
-}
-
-int kgd2kfd_resume_process(struct kfd_dev *kfd)
-{
-	int ret = 0;
-
-	if (!kfd->init_complete)
-		return 0;
-
-	mutex_lock(&kfd_processes_mutex);
-	if (--kfd_locked == 0)
-		ret = kfd_resume_all_processes();
-	WARN_ONCE(kfd_locked < 0, "KFD suspend / resume ref. error");
-	mutex_unlock(&kfd_processes_mutex);
+	/* for runtime resume, skip unlocking kfd */
+	if (!run_pm) {
+		mutex_lock(&kfd_processes_mutex);
+		if (--kfd_locked == 0)
+			ret = kfd_resume_all_processes();
+		WARN_ONCE(kfd_locked < 0, "KFD suspend / resume ref. error");
+		mutex_unlock(&kfd_processes_mutex);
+	}
 
 	return ret;
 }
@@ -1478,53 +1442,24 @@ unsigned int kfd_get_num_xgmi_sdma_engines(struct kfd_node *node)
 		kfd_get_num_sdma_engines(node);
 }
 
-int kgd2kfd_check_and_lock_kfd(struct kfd_dev *kfd)
+int kgd2kfd_check_and_lock_kfd(void)
 {
-	struct kfd_process *p;
-	int r = 0, temp, idx;
-
 	mutex_lock(&kfd_processes_mutex);
-
-	if (hash_empty(kfd_processes_table) && !kfd_is_locked(kfd))
-		goto out;
-
-	/* fail under system reset/resume or kfd device is partition switching. */
-	if (kfd_is_locked(kfd)) {
-		r = -EBUSY;
-		goto out;
+	if (!hash_empty(kfd_processes_table) || kfd_is_locked()) {
+		mutex_unlock(&kfd_processes_mutex);
+		return -EBUSY;
 	}
 
-	/*
-	 * ensure all running processes are cgroup excluded from device before mode switch.
-	 * i.e. no pdd was created on the process socket.
-	 */
-	idx = srcu_read_lock(&kfd_processes_srcu);
-	hash_for_each_rcu(kfd_processes_table, temp, p, kfd_processes) {
-		int i;
-
-		for (i = 0; i < p->n_pdds; i++) {
-			if (p->pdds[i]->dev->kfd != kfd)
-				continue;
-
-			r = -EBUSY;
-			goto proc_check_unlock;
-		}
-	}
-
-proc_check_unlock:
-	srcu_read_unlock(&kfd_processes_srcu, idx);
-out:
-	if (!r)
-		++kfd->kfd_dev_lock;
+	++kfd_locked;
 	mutex_unlock(&kfd_processes_mutex);
 
-	return r;
+	return 0;
 }
 
-void kgd2kfd_unlock_kfd(struct kfd_dev *kfd)
+void kgd2kfd_unlock_kfd(void)
 {
 	mutex_lock(&kfd_processes_mutex);
-	--kfd->kfd_dev_lock;
+	--kfd_locked;
 	mutex_unlock(&kfd_processes_mutex);
 }
 

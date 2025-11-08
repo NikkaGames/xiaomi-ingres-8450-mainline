@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # AMD IBS software filtering
 
 echo "check availability of IBS swfilt"

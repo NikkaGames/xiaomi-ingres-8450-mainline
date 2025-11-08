@@ -28,8 +28,7 @@ static ssize_t sram_read(struct file *filp, struct kobject *kobj,
 {
 	struct sram_partition *part;
 
-	/* Cast away the const as the attribute is part of a larger structure */
-	part = (struct sram_partition *)container_of(attr, struct sram_partition, battr);
+	part = container_of(attr, struct sram_partition, battr);
 
 	mutex_lock(&part->lock);
 	memcpy_fromio(buf, part->base + pos, count);
@@ -44,8 +43,7 @@ static ssize_t sram_write(struct file *filp, struct kobject *kobj,
 {
 	struct sram_partition *part;
 
-	/* Cast away the const as the attribute is part of a larger structure */
-	part = (struct sram_partition *)container_of(attr, struct sram_partition, battr);
+	part = container_of(attr, struct sram_partition, battr);
 
 	mutex_lock(&part->lock);
 	memcpy_toio(part->base + pos, buf, count);
@@ -85,8 +83,8 @@ static int sram_add_export(struct sram_dev *sram, struct sram_reserve *block,
 		return -ENOMEM;
 
 	part->battr.attr.mode = S_IRUSR | S_IWUSR;
-	part->battr.read = sram_read;
-	part->battr.write = sram_write;
+	part->battr.read_new = sram_read;
+	part->battr.write_new = sram_write;
 	part->battr.size = block->size;
 
 	return device_create_bin_file(sram->dev, &part->battr);
@@ -166,8 +164,8 @@ static void sram_free_partitions(struct sram_dev *sram)
 static int sram_reserve_cmp(void *priv, const struct list_head *a,
 					const struct list_head *b)
 {
-	const struct sram_reserve *ra = list_entry(a, struct sram_reserve, list);
-	const struct sram_reserve *rb = list_entry(b, struct sram_reserve, list);
+	struct sram_reserve *ra = list_entry(a, struct sram_reserve, list);
+	struct sram_reserve *rb = list_entry(b, struct sram_reserve, list);
 
 	return ra->start - rb->start;
 }

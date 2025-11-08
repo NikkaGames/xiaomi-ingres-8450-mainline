@@ -13,6 +13,7 @@
 #include <linux/dm-io.h>
 #include <linux/dm-kcopyd.h>
 #include <linux/dax.h>
+#include <linux/pfn_t.h>
 #include <linux/libnvdimm.h>
 #include <linux/delay.h>
 #include "dm-io-tracker.h"
@@ -255,7 +256,7 @@ static int persistent_memory_claim(struct dm_writecache *wc)
 	int r;
 	loff_t s;
 	long p, da;
-	unsigned long pfn;
+	pfn_t pfn;
 	int id;
 	struct page **pages;
 	sector_t offset;
@@ -289,7 +290,7 @@ static int persistent_memory_claim(struct dm_writecache *wc)
 		r = da;
 		goto err2;
 	}
-	if (!pfn_valid(pfn)) {
+	if (!pfn_t_has_page(pfn)) {
 		wc->memory_map = NULL;
 		r = -EOPNOTSUPP;
 		goto err2;
@@ -313,13 +314,13 @@ static int persistent_memory_claim(struct dm_writecache *wc)
 				r = daa ? daa : -EINVAL;
 				goto err3;
 			}
-			if (!pfn_valid(pfn)) {
+			if (!pfn_t_has_page(pfn)) {
 				r = -EOPNOTSUPP;
 				goto err3;
 			}
 			while (daa-- && i < p) {
-				pages[i++] = pfn_to_page(pfn);
-				pfn++;
+				pages[i++] = pfn_t_to_page(pfn);
+				pfn.val++;
 				if (!(i & 15))
 					cond_resched();
 			}

@@ -313,21 +313,16 @@ by a sched_ext scheduler:
         ops.runnable();         /* Task becomes ready to run */
 
         while (task is runnable) {
-            if (task is not in a DSQ && task->scx.slice == 0) {
+            if (task is not in a DSQ) {
                 ops.enqueue();  /* Task can be added to a DSQ */
 
-                /* Any usable CPU becomes available */
+                /* A CPU becomes available */
 
                 ops.dispatch(); /* Task is moved to a local DSQ */
             }
             ops.running();      /* Task starts running on its assigned CPU */
-            while (task->scx.slice > 0 && task is runnable)
-                ops.tick();     /* Called every 1/HZ seconds */
+            ops.tick();         /* Called every 1/HZ seconds */
             ops.stopping();     /* Task stops running (time slice expires or wait) */
-
-            /* Task's CPU becomes available */
-
-            ops.dispatch();     /* task->scx.slice can be refilled */
         }
 
         ops.quiescent();        /* Task releases its assigned CPU (wait) */

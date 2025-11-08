@@ -5,8 +5,6 @@
  * bridge driver for legacy DT bindings, utilizing display-timings node
  */
 
-#include <linux/export.h>
-
 #include <drm/drm_bridge.h>
 #include <drm/drm_modes.h>
 #include <drm/drm_probe_helper.h>
@@ -61,10 +59,9 @@ struct drm_bridge *devm_imx_drm_legacy_bridge(struct device *dev,
 	struct imx_legacy_bridge *imx_bridge;
 	int ret;
 
-	imx_bridge = devm_drm_bridge_alloc(dev, struct imx_legacy_bridge,
-					   base, &imx_legacy_bridge_funcs);
-	if (IS_ERR(imx_bridge))
-		return ERR_CAST(imx_bridge);
+	imx_bridge = devm_kzalloc(dev, sizeof(*imx_bridge), GFP_KERNEL);
+	if (!imx_bridge)
+		return ERR_PTR(-ENOMEM);
 
 	ret = of_get_drm_display_mode(np,
 				      &imx_bridge->mode,
@@ -75,6 +72,7 @@ struct drm_bridge *devm_imx_drm_legacy_bridge(struct device *dev,
 
 	imx_bridge->mode.type |= DRM_MODE_TYPE_DRIVER;
 
+	imx_bridge->base.funcs = &imx_legacy_bridge_funcs;
 	imx_bridge->base.of_node = np;
 	imx_bridge->base.ops = DRM_BRIDGE_OP_MODES;
 	imx_bridge->base.type = type;

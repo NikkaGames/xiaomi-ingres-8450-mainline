@@ -282,7 +282,8 @@ static void cpu_map_gro_flush(struct bpf_cpu_map_entry *rcpu, bool empty)
 	 * This is equivalent to how NAPI decides whether to perform a full
 	 * flush.
 	 */
-	gro_flush_normal(&rcpu->gro, !empty && HZ >= 1000);
+	gro_flush(&rcpu->gro, !empty && HZ >= 1000);
+	gro_normal_list(&rcpu->gro);
 }
 
 static int cpu_map_kthread_run(void *data)

@@ -78,7 +78,7 @@ pid_t waitpid(pid_t pid, int *status, int options)
 
 	ret = waitid(idtype, id, &info, options);
 	if (ret)
-		return -1;
+		return ret;
 
 	switch (info.si_code) {
 	case 0:

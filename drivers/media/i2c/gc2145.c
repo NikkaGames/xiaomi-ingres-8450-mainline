@@ -963,6 +963,7 @@ static int gc2145_enable_streams(struct v4l2_subdev *sd,
 	return 0;
 
 err_rpm_put:
+	pm_runtime_mark_last_busy(&client->dev);
 	pm_runtime_put_autosuspend(&client->dev);
 	return ret;
 }
@@ -984,6 +985,7 @@ static int gc2145_disable_streams(struct v4l2_subdev *sd,
 	if (ret)
 		dev_err(&client->dev, "%s failed to write regs\n", __func__);
 
+	pm_runtime_mark_last_busy(&client->dev);
 	pm_runtime_put_autosuspend(&client->dev);
 
 	return ret;
@@ -1191,6 +1193,7 @@ static int gc2145_s_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	}
 
+	pm_runtime_mark_last_busy(&client->dev);
 	pm_runtime_put_autosuspend(&client->dev);
 
 	return ret;

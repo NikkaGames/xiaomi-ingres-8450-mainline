@@ -1010,8 +1010,9 @@
 
 	i2c-gpio-0 {
 		compatible = "i2c-gpio";
-		sda-gpios = <&pioA 20 GPIO_ACTIVE_HIGH>;
-		scl-gpios = <&pioA 21 GPIO_ACTIVE_HIGH>;
+		gpios = <&pioA 20 GPIO_ACTIVE_HIGH /* sda */
+			 &pioA 21 GPIO_ACTIVE_HIGH /* scl */
+			>;
 		i2c-gpio,sda-open-drain;
 		i2c-gpio,scl-open-drain;
 		i2c-gpio,delay-us = <5>;	/* ~100 kHz */

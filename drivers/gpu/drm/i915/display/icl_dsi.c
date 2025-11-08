@@ -45,7 +45,6 @@
 #include "intel_crtc.h"
 #include "intel_ddi.h"
 #include "intel_de.h"
-#include "intel_display_regs.h"
 #include "intel_dsi.h"
 #include "intel_dsi_vbt.h"
 #include "intel_panel.h"
@@ -193,12 +192,12 @@ static int dsi_send_pkt_hdr(struct intel_dsi_host *host,
 	else
 		tmp &= ~PAYLOAD_PRESENT;
 
-	tmp &= ~(VBLANK_FENCE | LP_DATA_TRANSFER | PIPELINE_FLUSH);
+	tmp &= ~VBLANK_FENCE;
 
 	if (enable_lpdt)
 		tmp |= LP_DATA_TRANSFER;
 	else
-		tmp |= PIPELINE_FLUSH;
+		tmp &= ~LP_DATA_TRANSFER;
 
 	tmp &= ~(PARAM_WC_MASK | VC_MASK | DT_MASK);
 	tmp |= ((packet->header[0] & VC_MASK) << VC_SHIFT);
@@ -659,7 +658,7 @@ static void gen11_dsi_map_pll(struct intel_encoder *encoder,
 {
 	struct intel_display *display = to_intel_display(encoder);
 	struct intel_dsi *intel_dsi = enc_to_intel_dsi(encoder);
-	struct intel_dpll *pll = crtc_state->intel_dpll;
+	struct intel_shared_dpll *pll = crtc_state->shared_dpll;
 	enum phy phy;
 	u32 val;
 
@@ -1277,8 +1276,6 @@ static void gen11_dsi_enable(struct intel_atomic_state *state,
 	intel_backlight_enable(crtc_state, conn_state);
 	intel_dsi_vbt_exec_sequence(intel_dsi, MIPI_SEQ_BACKLIGHT_ON);
 
-	intel_panel_prepare(crtc_state, conn_state);
-
 	intel_crtc_vblank_on(crtc_state);
 }
 
@@ -1411,8 +1408,6 @@ static void gen11_dsi_disable(struct intel_atomic_state *state,
 			      const struct drm_connector_state *old_conn_state)
 {
 	struct intel_dsi *intel_dsi = enc_to_intel_dsi(encoder);
-
-	intel_panel_unprepare(old_conn_state);
 
 	/* step1: turn off backlight */
 	intel_dsi_vbt_exec_sequence(intel_dsi, MIPI_SEQ_BACKLIGHT_OFF);

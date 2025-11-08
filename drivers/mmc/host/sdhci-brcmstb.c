@@ -485,6 +485,7 @@ add_host:
 	return res;
 
 err:
+	sdhci_pltfm_free(pdev);
 	clk_disable_unprepare(base_clk);
 	return res;
 }

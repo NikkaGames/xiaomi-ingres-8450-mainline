@@ -2675,8 +2675,8 @@ static unsigned long rt5682_wclk_recalc_rate(struct clk_hw *hw,
 	return rt5682->lrck[RT5682_AIF1];
 }
 
-static int rt5682_wclk_determine_rate(struct clk_hw *hw,
-				      struct clk_rate_request *req)
+static long rt5682_wclk_round_rate(struct clk_hw *hw, unsigned long rate,
+				   unsigned long *parent_rate)
 {
 	struct rt5682_priv *rt5682 =
 		container_of(hw, struct rt5682_priv,
@@ -2689,13 +2689,13 @@ static int rt5682_wclk_determine_rate(struct clk_hw *hw,
 	 * Only accept to set wclk rate to 44.1k or 48kHz.
 	 * It will force to 48kHz if not both.
 	 */
-	if (req->rate != CLK_48 && req->rate != CLK_44) {
+	if (rate != CLK_48 && rate != CLK_44) {
 		dev_warn(rt5682->i2c_dev, "%s: clk %s only support %d or %d Hz output\n",
 			__func__, clk_name, CLK_44, CLK_48);
-		req->rate = CLK_48;
+		rate = CLK_48;
 	}
 
-	return 0;
+	return rate;
 }
 
 static int rt5682_wclk_set_rate(struct clk_hw *hw, unsigned long rate,
@@ -2795,15 +2795,15 @@ static unsigned long rt5682_bclk_get_factor(unsigned long rate,
 		return 256;
 }
 
-static int rt5682_bclk_determine_rate(struct clk_hw *hw,
-				      struct clk_rate_request *req)
+static long rt5682_bclk_round_rate(struct clk_hw *hw, unsigned long rate,
+				   unsigned long *parent_rate)
 {
 	struct rt5682_priv *rt5682 =
 		container_of(hw, struct rt5682_priv,
 			     dai_clks_hw[RT5682_DAI_BCLK_IDX]);
 	unsigned long factor;
 
-	if (!req->best_parent_rate || !rt5682_clk_check(rt5682))
+	if (!*parent_rate || !rt5682_clk_check(rt5682))
 		return -EINVAL;
 
 	/*
@@ -2813,11 +2813,9 @@ static int rt5682_bclk_determine_rate(struct clk_hw *hw,
 	 * and find the appropriate multiplier of BCLK to
 	 * get the rounded down BCLK value.
 	 */
-	factor = rt5682_bclk_get_factor(req->rate, req->best_parent_rate);
+	factor = rt5682_bclk_get_factor(rate, *parent_rate);
 
-	req->rate = req->best_parent_rate * factor;
-
-	return 0;
+	return *parent_rate * factor;
 }
 
 static int rt5682_bclk_set_rate(struct clk_hw *hw, unsigned long rate,
@@ -2851,12 +2849,12 @@ static const struct clk_ops rt5682_dai_clk_ops[RT5682_DAI_NUM_CLKS] = {
 		.prepare = rt5682_wclk_prepare,
 		.unprepare = rt5682_wclk_unprepare,
 		.recalc_rate = rt5682_wclk_recalc_rate,
-		.determine_rate = rt5682_wclk_determine_rate,
+		.round_rate = rt5682_wclk_round_rate,
 		.set_rate = rt5682_wclk_set_rate,
 	},
 	[RT5682_DAI_BCLK_IDX] = {
 		.recalc_rate = rt5682_bclk_recalc_rate,
-		.determine_rate = rt5682_bclk_determine_rate,
+		.round_rate = rt5682_bclk_round_rate,
 		.set_rate = rt5682_bclk_set_rate,
 	},
 };

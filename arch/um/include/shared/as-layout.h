@@ -26,7 +26,7 @@
 #define STUB_DATA_PAGES 2 /* must be a power of two */
 #define STUB_END (STUB_DATA + STUB_DATA_PAGES * UM_KERN_PAGE_SIZE)
 
-#ifndef __ASSEMBLER__
+#ifndef __ASSEMBLY__
 
 #include <sysdep/ptrace.h>
 

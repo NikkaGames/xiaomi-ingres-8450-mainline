@@ -111,7 +111,6 @@ static DEVICE_ATTR(em_buffer, S_IWUSR | S_IRUGO,
 static DEVICE_ATTR(em_message_supported, S_IRUGO, ahci_show_em_supported, NULL);
 
 static struct attribute *ahci_shost_attrs[] = {
-	&dev_attr_link_power_management_supported.attr,
 	&dev_attr_link_power_management_policy.attr,
 	&dev_attr_em_message_type.attr,
 	&dev_attr_em_message.attr,
@@ -163,10 +162,10 @@ struct ata_port_operations ahci_ops = {
 
 	.freeze			= ahci_freeze,
 	.thaw			= ahci_thaw,
-	.reset.softreset	= ahci_softreset,
-	.reset.hardreset	= ahci_hardreset,
-	.reset.postreset	= ahci_postreset,
-	.pmp_reset.softreset	= ahci_softreset,
+	.softreset		= ahci_softreset,
+	.hardreset		= ahci_hardreset,
+	.postreset		= ahci_postreset,
+	.pmp_softreset		= ahci_softreset,
 	.error_handler		= ahci_error_handler,
 	.post_internal_cmd	= ahci_post_internal_cmd,
 	.dev_config		= ahci_dev_config,
@@ -193,7 +192,7 @@ EXPORT_SYMBOL_GPL(ahci_ops);
 
 struct ata_port_operations ahci_pmp_retry_srst_ops = {
 	.inherits		= &ahci_ops,
-	.reset.softreset	= ahci_pmp_retry_softreset,
+	.softreset		= ahci_pmp_retry_softreset,
 };
 EXPORT_SYMBOL_GPL(ahci_pmp_retry_srst_ops);
 

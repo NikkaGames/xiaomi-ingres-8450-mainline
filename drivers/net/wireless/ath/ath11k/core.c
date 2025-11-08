@@ -2,10 +2,8 @@
 /*
  * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
  * Copyright (c) 2021-2025 Qualcomm Innovation Center, Inc. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
-#include <linux/export.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/remoteproc.h>
@@ -1393,7 +1391,7 @@ static int __ath11k_core_create_board_name(struct ath11k_base *ab, char *name,
 					   enum ath11k_bdf_name_type name_type)
 {
 	/* strlen(',variant=') + strlen(ab->qmi.target.bdf_ext) */
-	char variant[9 + ATH11K_QMI_BDF_EXT_STR_LENGTH] = {};
+	char variant[9 + ATH11K_QMI_BDF_EXT_STR_LENGTH] = { 0 };
 
 	if (with_variant && ab->qmi.target.bdf_ext[0] != '\0')
 		scnprintf(variant, sizeof(variant), ",variant=%s",
@@ -2583,15 +2581,10 @@ int ath11k_core_init(struct ath11k_base *ab)
 	ret = ath11k_core_soc_create(ab);
 	if (ret) {
 		ath11k_err(ab, "failed to create soc core: %d\n", ret);
-		goto err_unregister_pm_notifier;
+		return ret;
 	}
 
 	return 0;
-
-err_unregister_pm_notifier:
-	ath11k_core_pm_notifier_unregister(ab);
-
-	return ret;
 }
 EXPORT_SYMBOL(ath11k_core_init);
 
