@@ -5147,6 +5147,9 @@ static struct of_device_id fts_of_match_table[] = {
 	{
 		.compatible = "st,spi",
 	},
+	{
+		.compatible = "st,fts-ingres",
+	},
 	{},
 };
 MODULE_DEVICE_TABLE(of, fts_of_match_table);
@@ -5156,7 +5159,10 @@ static const struct i2c_device_id fts_device_id[] = {
 	{
 		"st,spi", 0
 	},
-	{}
+	{
+		"st,fts-ingres", 0
+	},
+	{},
 };
 MODULE_DEVICE_TABLE(i2c, fts_device_id);
 
@@ -5177,7 +5183,10 @@ static const struct spi_device_id fts_device_id[] = {
 	{
 		"st,spi", 0
 	},
-	{}
+	{
+		"st,fts-ingres", 0
+	},
+	{},
 };
 
 MODULE_DEVICE_TABLE(spi, fts_device_id);

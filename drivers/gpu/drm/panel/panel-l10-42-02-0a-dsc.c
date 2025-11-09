@@ -440,7 +440,7 @@ static void l10_42_02_0a_dsc_remove(struct mipi_dsi_device *dsi)
 }
 
 static const struct of_device_id l10_42_02_0a_dsc_of_match[] = {
-	{ .compatible = "mdss,l3-42-02-0a-dsc" }, // FIXME
+	{ .compatible = "mdss,l10-42-02-0a-dsc" }, // FIXME
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, l10_42_02_0a_dsc_of_match);
@@ -449,7 +449,7 @@ static struct mipi_dsi_driver l10_42_02_0a_dsc_driver = {
 	.probe = l10_42_02_0a_dsc_probe,
 	.remove = l10_42_02_0a_dsc_remove,
 	.driver = {
-		.name = "panel-l3-42-02-0a-dsc",
+		.name = "panel-l10-42-02-0a-dsc",
 		.of_match_table = l10_42_02_0a_dsc_of_match,
 	},
 };

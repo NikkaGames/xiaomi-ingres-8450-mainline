@@ -706,7 +706,7 @@
 	status = "okay";
 
 	touchscreen@0 {
-		compatible = "st,spi";
+		compatible = "st,fts-ingres";
 		reg = <0x0>;
 		interrupt-parent = <&tlmm>;
 		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
@@ -854,7 +854,7 @@
 };
 
 &mdss {
-	status = "disabled";
+	status = "okay";
 };
 
 &mdss_dsi0 {
@@ -1040,7 +1040,7 @@
 	sde_dsi_active: sde-dsi-active-state {
 		pins = "gpio0";
 		function = "gpio";
-		drive-strength = <8>;
+		drive-strength = <16>;
 		bias-disable;
 	};
 
