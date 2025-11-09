@@ -55,6 +55,12 @@ config DRM_PANEL_BOE_BF060Y8M_AJ0
 	  5.99" AMOLED modules. The panel has a 1080x2160 resolution and
 	  uses 24 bit RGB per pixel. It provides a MIPI DSI interface to
 	  the host and backlight is controlled through DSI commands.
+	  
+config DRM_PANEL_XIAOMI_42_02_0A
+	tristate "XIAOMI_42_02_0A panel"
+	depends on DRM
+	help
+	  ximi
 
 config DRM_PANEL_BOE_HIMAX8279D
 	tristate "Boe Himax8279d panel"
