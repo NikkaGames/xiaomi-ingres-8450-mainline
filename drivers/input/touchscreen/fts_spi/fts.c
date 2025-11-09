@@ -3479,7 +3479,7 @@ static int fts_init(struct fts_ts_info *info)
 		}
 		if (retry == 3) {
 			logError(1, "%s read chip error,no panel\n", tag);
-			return ERROR_OP_NOT_ALLOW;
+			return OK;
 		} else {
 			logError(
 				1,
@@ -4936,7 +4936,8 @@ static int fts_probe(struct spi_device *client)
 			 "%s Cannot execute fw upgrade the device ERROR %08X\n",
 			 tag, error);
 		error = -ENODEV;
-		goto ProbeErrorExit_7;
+		error = OK;
+		//goto ProbeErrorExit_7;
 	}
 #else
 	logError(0, "%s SET Auto Fw Update: \n", tag);
@@ -5145,10 +5146,7 @@ static void fts_remove(struct spi_device *client)
 */
 static struct of_device_id fts_of_match_table[] = {
 	{
-		.compatible = "st,spi",
-	},
-	{
-		.compatible = "st,fts-ingres",
+		.compatible = "fts-ingres",
 	},
 	{},
 };
@@ -5157,10 +5155,7 @@ MODULE_DEVICE_TABLE(of, fts_of_match_table);
 #ifdef I2C_INTERFACE
 static const struct i2c_device_id fts_device_id[] = {
 	{
-		"st,spi", 0
-	},
-	{
-		"st,fts-ingres", 0
+		"fts-ingres", 0
 	},
 	{},
 };
@@ -5181,10 +5176,7 @@ static struct i2c_driver fts_i2c_driver = {
 #else
 static const struct spi_device_id fts_device_id[] = {
 	{
-		"st,spi", 0
-	},
-	{
-		"st,fts-ingres", 0
+		"fts-ingres", 0
 	},
 	{},
 };

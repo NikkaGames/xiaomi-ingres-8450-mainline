@@ -707,7 +707,7 @@
 
 	fts@0 {
 	    status = "okay";
-		compatible = "st,fts-ingres";
+		compatible = "fts-ingres";
 		reg = <0x0>;
 		interrupt-parent = <&tlmm>;
 		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
