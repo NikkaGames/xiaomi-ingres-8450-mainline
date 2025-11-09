@@ -705,7 +705,8 @@
 	clock-frequency = <50000000>;
 	status = "okay";
 
-	touchscreen@0 {
+	fts@0 {
+	    status = "okay";
 		compatible = "st,fts-ingres";
 		reg = <0x0>;
 		interrupt-parent = <&tlmm>;
@@ -725,7 +726,7 @@
 		fts,y-max = <24000>;
 		fts,support-super-resolution = <1>;
 		spi-max-frequency = <12000000>;
-		fts,default-fw-name = "st_fts_l3.ftb";
+		fts,default-fw-name = "st_fts_l10.ftb";
 		fts,config-array-size = <1>;
 		/* panel = <&dsi_l10_42_02_0a_dsc_cmd
 			&dsi_r66451_amoled_video>; */
@@ -854,7 +855,7 @@
 };
 
 &mdss {
-	status = "okay";
+	status = "disabled";
 };
 
 &mdss_dsi0 {
