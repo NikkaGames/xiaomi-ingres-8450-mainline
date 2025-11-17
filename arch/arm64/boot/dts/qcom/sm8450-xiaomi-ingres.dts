@@ -1078,8 +1078,6 @@
 
 &swr1 {
 	status = "okay";
-
-	/* WCD9380 RX */
 	wcd_rx: codec@0,4 {
 		compatible = "sdw20217010d00";
 		reg = <0 4>;
@@ -1089,8 +1087,6 @@
 
 &swr2 {
 	status = "okay";
-
-	/* WCD9380 TX */
 	wcd_tx: codec@0,3 {
 		compatible = "sdw20217010d00";
 		reg = <0 3>;
