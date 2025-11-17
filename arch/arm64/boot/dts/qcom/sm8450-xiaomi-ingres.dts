@@ -694,11 +694,56 @@
 };
 
 &gpu {
-	status = "okay";
+	status = "disabled";
 
 	zap-shader {
 		firmware-name = "qcom/a730_zap.mbn";
 	};
+};
+
+&dispcc {
+	status = "disabled";
+};
+
+&mdss {
+	status = "disabled";
+};
+
+&mdss_dsi0 {
+	vdda-supply = <&pm8350_l6>;
+	status = "okay";
+
+	display_panel: panel@0 {
+		compatible = "mdss,l10-42-02-0a-dsc";
+		reg = <0>;
+
+		reset-gpios = <&tlmm 0 GPIO_ACTIVE_LOW>;
+		te-gpios = <&tlmm 86 GPIO_ACTIVE_HIGH>;
+
+		pinctrl-0 = <&sde_dsi_active &sde_te_active_sleep>;
+		pinctrl-1 = <&sde_dsi_suspend &sde_te_active_sleep>;
+		pinctrl-names = "default", "sleep";
+
+		vddd-supply = <&pm8350c_l10>;
+		vci-supply = <&pm8350c_l13>;
+		vddio-supply = <&pm8350c_l12>;
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&mdss_dsi0_out>;
+			};
+		};
+	};
+};
+
+&mdss_dsi0_out {
+	data-lanes = <0 1 2 3>;
+	remote-endpoint = <&panel_in>;
+};
+
+&mdss_dsi0_phy {
+	vdds-supply = <&pm8350_l5>;
+	status = "okay";
 };
 
 &spi4 {
@@ -728,8 +773,7 @@
 		spi-max-frequency = <12000000>;
 		fts,default-fw-name = "st_fts_l10.ftb";
 		fts,config-array-size = <1>;
-		/* panel = <&dsi_l10_42_02_0a_dsc_cmd
-			&dsi_r66451_amoled_video>; */
+		panel = <&display_panel>;
 
 		fts,cfg_0 {
 			fts,tp-vendor = <0x42>;
@@ -848,51 +892,6 @@
 			cirrus,gpio-output-enable;
 		};
 	};
-};
-
-&dispcc {
-	status = "disabled";
-};
-
-&mdss {
-	status = "disabled";
-};
-
-&mdss_dsi0 {
-	vdda-supply = <&pm8350_l6>;
-	status = "okay";
-
-	panel@0 {
-		compatible = "mdss,l10-42-02-0a-dsc";
-		reg = <0>;
-
-		reset-gpios = <&tlmm 0 GPIO_ACTIVE_LOW>;
-		te-gpios = <&tlmm 86 GPIO_ACTIVE_HIGH>;
-
-		pinctrl-0 = <&sde_dsi_active &sde_te_active_sleep>;
-		pinctrl-1 = <&sde_dsi_suspend &sde_te_active_sleep>;
-		pinctrl-names = "default", "sleep";
-
-		vddd-supply = <&pm8350c_l10>;
-		vci-supply = <&pm8350c_l13>;
-		vddio-supply = <&pm8350c_l12>;
-
-		port {
-			panel_in: endpoint {
-				remote-endpoint = <&mdss_dsi0_out>;
-			};
-		};
-	};
-};
-
-&mdss_dsi0_out {
-	data-lanes = <0 1 2 3>;
-	remote-endpoint = <&panel_in>;
-};
-
-&mdss_dsi0_phy {
-	vdds-supply = <&pm8350_l5>;
-	status = "okay";
 };
 
 &tlmm {
